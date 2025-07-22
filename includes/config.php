@@ -18,4 +18,7 @@ $conn->set_charset("utf8mb4");
 
 // Start session
 session_start();
+
+// Timezone setting
+date_default_timezone_set('America/New_York');
 ?>

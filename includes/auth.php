@@ -12,7 +12,7 @@ function isAdmin() {
 // Redirect if not logged in
 function requireLogin() {
     if (!isLoggedIn()) {
-        header("Location: ../auth/login.php");
+        header("Location: " . getBasePath() . "auth/login.php");
         exit();
     }
 }
@@ -21,8 +21,35 @@ function requireLogin() {
 function requireAdmin() {
     requireLogin();
     if (!isAdmin()) {
-        header("Location: ../index.php");
+        header("Location: " . getBasePath() . "index.php");
         exit();
     }
+}
+
+// Get base path based on current directory
+function getBasePath() {
+    $currentPath = $_SERVER['REQUEST_URI'];
+    if (strpos($currentPath, '/auth/') !== false || 
+        strpos($currentPath, '/products/') !== false || 
+        strpos($currentPath, '/sales/') !== false || 
+        strpos($currentPath, '/stock/') !== false || 
+        strpos($currentPath, '/suppliers/') !== false || 
+        strpos($currentPath, '/reports/') !== false) {
+        return '../';
+    }
+    return '';
+}
+
+// Generate CSRF token
+function generateCSRFToken() {
+    if (!isset($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+// Verify CSRF token
+function verifyCSRFToken($token) {
+    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
 }
 ?>
