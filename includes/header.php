@@ -154,6 +154,21 @@
             margin: 0;
         }
 
+        /* Badge for notifications */
+        .nav-badge {
+            background: #e74c3c;
+            color: white;
+            font-size: 0.7rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 10px;
+            margin-left: auto;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar.collapsed .nav-badge {
+            display: none;
+        }
+
         /* User Section */
         .user-section {
             position: absolute;
@@ -284,25 +299,11 @@
             margin: 0;
         }
 
-        /* Tooltip for collapsed sidebar user section */
-        .sidebar.collapsed .user-info:hover::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            left: 70px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: #fff;
-            padding: 0.5rem 1rem;
-            border-radius: 5px;
-            font-size: 0.85rem;
-            white-space: nowrap;
-            z-index: 1001;
-            animation: fadeIn 0.2s ease;
-        }
-
+        /* Tooltip for collapsed sidebar */
+        .sidebar.collapsed .nav-link:hover::after,
+        .sidebar.collapsed .user-info:hover::after,
         .sidebar.collapsed .logout-btn:hover::after {
-            content: "Logout";
+            content: attr(data-tooltip);
             position: absolute;
             left: 70px;
             top: 50%;
@@ -500,6 +501,26 @@
             box-shadow: 0 5px 15px rgba(149, 165, 166, 0.4);
         }
 
+        .btn-warning {
+            background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+            color: white;
+        }
+
+        .btn-warning:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(243, 156, 18, 0.4);
+        }
+
+        .btn-info {
+            background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+            color: white;
+        }
+
+        .btn-info:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(23, 162, 184, 0.4);
+        }
+
         .btn-sm {
             padding: 0.4rem 0.8rem;
             font-size: 0.875rem;
@@ -564,6 +585,12 @@
             color: #e67e22;
         }
 
+        .alert-info {
+            background: rgba(23, 162, 184, 0.1);
+            border-color: #17a2b8;
+            color: #138496;
+        }
+
         /* Text Colors */
         .text-success {
             color: #2ecc71 !important;
@@ -575,6 +602,18 @@
 
         .text-danger {
             color: #e74c3c !important;
+        }
+
+        .text-info {
+            color: #17a2b8 !important;
+        }
+
+        .text-muted {
+            color: #6c757d !important;
+        }
+
+        .text-primary {
+            color: #667eea !important;
         }
 
         /* Mobile Responsive */
@@ -622,6 +661,11 @@
             }
         }
 
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
         /* Loading Animation */
         .loading {
             display: inline-block;
@@ -635,32 +679,6 @@
 
         @keyframes spin {
             to { transform: rotate(360deg); }
-        }
-
-        /* Tooltip for collapsed sidebar */
-        .nav-link {
-            position: relative;
-        }
-
-        .sidebar.collapsed .nav-link:hover::after {
-            content: attr(data-tooltip);
-            position: absolute;
-            left: 70px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: #fff;
-            padding: 0.5rem 1rem;
-            border-radius: 5px;
-            font-size: 0.85rem;
-            white-space: nowrap;
-            z-index: 1001;
-            animation: fadeIn 0.2s ease;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
         }
     </style>
 </head>
@@ -693,9 +711,22 @@
             </div>
             
             <div class="nav-item">
-                <a href="<?php echo getBasePath(); ?>stock/view_stock.php" class="nav-link" data-tooltip="Stock">
+                <a href="<?php echo getBasePath(); ?>stock/stock_dashboard.php" class="nav-link" data-tooltip="Stock Management">
                     <i class="fas fa-boxes"></i>
                     <span>Stock</span>
+                    <?php
+                    // Check for low stock items
+                    $low_stock_count = 0;
+                    if (isset($conn)) {
+                        $result = $conn->query("SELECT COUNT(*) FROM products WHERE stock_quantity <= 10");
+                        if ($result) {
+                            $low_stock_count = $result->fetch_row()[0];
+                        }
+                    }
+                    if ($low_stock_count > 0):
+                    ?>
+                    <span class="nav-badge"><?php echo $low_stock_count; ?></span>
+                    <?php endif; ?>
                 </a>
             </div>
             
@@ -724,19 +755,21 @@
         <!-- User Section -->
         <div class="user-section">
             <?php if (isLoggedIn()): ?>
-                <div class="user-info">
+                <div class="user-info" data-tooltip="<?php echo htmlspecialchars($_SESSION['username']) . ' (' . ucfirst($_SESSION['role']) . ')'; ?>">
                     <div class="user-avatar">
                         <i class="fas fa-user"></i>
                     </div>
-                    <div class="user-name"><?php echo htmlspecialchars($_SESSION['username']); ?></div>
-                    <div class="user-role"><?php echo ucfirst($_SESSION['role']); ?></div>
+                    <div class="user-details">
+                        <div class="user-name"><?php echo htmlspecialchars($_SESSION['username']); ?></div>
+                        <div class="user-role"><?php echo ucfirst($_SESSION['role']); ?></div>
+                    </div>
                 </div>
-                <a href="<?php echo getBasePath(); ?>auth/logout.php" class="logout-btn">
+                <a href="<?php echo getBasePath(); ?>auth/logout.php" class="logout-btn" data-tooltip="Logout">
                     <i class="fas fa-sign-out-alt"></i>
                     <span>Logout</span>
                 </a>
             <?php else: ?>
-                <a href="<?php echo getBasePath(); ?>auth/login.php" class="logout-btn" style="background: rgba(46, 204, 113, 0.2); color: #2ecc71;">
+                <a href="<?php echo getBasePath(); ?>auth/login.php" class="logout-btn" style="background: rgba(46, 204, 113, 0.2); color: #2ecc71;" data-tooltip="Login">
                     <i class="fas fa-sign-in-alt"></i>
                     <span>Login</span>
                 </a>
@@ -794,6 +827,11 @@
             if (currentPath.endsWith('index.php') || currentPath.endsWith('/')) {
                 document.querySelector('a[href*="index.php"]').classList.add('active');
             }
+            
+            // Special case for stock pages - all should highlight "Stock" menu item
+            if (currentPath.includes('/stock/')) {
+                document.querySelector('a[href*="stock_dashboard.php"]').classList.add('active');
+            }
         }
 
         // Mobile menu handling
@@ -805,4 +843,76 @@
                 }
             }
         });
+
+        // Show notification function
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `alert alert-${type}`;
+            notification.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
+                ${message}
+            `;
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 9999;
+                min-width: 300px;
+                max-width: 500px;
+                animation: slideIn 0.5s ease;
+                cursor: pointer;
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(100%)';
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            }, 5000);
+            
+            // Click to dismiss
+            notification.addEventListener('click', () => {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(100%)';
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            });
+        }
+
+        // Loading state for buttons
+        function setLoadingState(button, loading = true) {
+            if (loading) {
+                button.disabled = true;
+                button.setAttribute('data-original-text', button.innerHTML);
+                button.innerHTML = '<span class="loading"></span> Loading...';
+            } else {
+                button.disabled = false;
+                button.innerHTML = button.getAttribute('data-original-text') || 'Submit';
+            }
+        }
+
+        // Format currency
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD'
+            }).format(amount);
+        }
+
+        // Validate email
+        function validateEmail(email) {
+            const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return re.test(email);
+        }
+
+        // Validate phone number
+        function validatePhone(phone) {
+            const re = /^[\+]?[1-9][\d]{0,15}$/;
+            return re.test(phone.replace(/\s/g, ''));
+        }
     </script>
