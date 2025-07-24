@@ -9,7 +9,7 @@ $errors = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $product_id = intval($_POST['product_id']);
     $quantity = intval($_POST['quantity']);
-    $unit_price = floatval(str_replace(',', '', $_POST['unit_price'])); // Remove commas before processing
+    $unit_price = floatval(str_replace(',', '', $_POST['unit_price']));
     $payment_method = trim($_POST['payment_method']);
     
     // Validation
@@ -46,10 +46,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception("Not enough stock available. Current stock: " . number_format($product['stock_quantity']));
             }
             
-            // Calculate total price using the manually entered unit price
+            // Calculate total price
             $total_price = $unit_price * $quantity;
             
-            // Record sale with the payment method
+            // Record sale with payment method
             $stmt = $conn->prepare("INSERT INTO sales (product_id, quantity, total_price, payment_method) VALUES (?, ?, ?, ?)");
             $stmt->bind_param("iids", $product_id, $quantity, $total_price, $payment_method);
             $stmt->execute();
@@ -62,17 +62,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute();
             $stmt->close();
             
-            // Commit transaction
             $conn->commit();
             
-            $success_message = "Sale completed successfully! Product: " . htmlspecialchars($product['name']) . 
-                             ", Quantity: " . number_format($quantity) . 
-                             ", Unit Price: " . number_format($unit_price) . " TZS" .
-                             ", Total: " . number_format($total_price) . " TZS" .
-                             ", Payment: " . htmlspecialchars($payment_method);
+            $success_message = "Sale completed successfully!";
             
         } catch (Exception $e) {
-            // Rollback transaction on error
             $conn->rollback();
             $errors[] = $e->getMessage();
         }
@@ -81,481 +75,221 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Get products with stock for dropdown
 $products = $conn->query("SELECT product_id, name, price, stock_quantity FROM products WHERE stock_quantity > 0 ORDER BY name");
+
+// Get today's stats
+$today_sales = $conn->query("SELECT COUNT(*) FROM sales WHERE DATE(sale_date) = CURDATE()")->fetch_row()[0];
+$today_revenue = $conn->query("SELECT SUM(total_price) FROM sales WHERE DATE(sale_date) = CURDATE()")->fetch_row()[0] ?? 0;
+$today_items = $conn->query("SELECT SUM(quantity) FROM sales WHERE DATE(sale_date) = CURDATE()")->fetch_row()[0] ?? 0;
 ?>
 
 <?php include '../includes/header.php'; ?>
 
-<h2><i class="fas fa-shopping-cart"></i> Make a Sale</h2>
-
-<div class="card">
-    <div class="card-header">
-        <h3>Process Sale Transaction</h3>
-        <a href="sales_history.php" class="btn btn-secondary">
-            <i class="fas fa-history"></i> Sales History
-        </a>
-    </div>
-    <div class="card-body">
-        <?php if (!empty($errors)): ?>
-            <div class="alert alert-danger">
-                <ul style="margin: 0; padding-left: 20px;">
-                    <?php foreach ($errors as $error): ?>
-                        <li><?php echo htmlspecialchars($error); ?></li>
-                    <?php endforeach; ?>
-                </ul>
-            </div>
-        <?php endif; ?>
-        
-        <?php if ($success_message): ?>
-            <div class="alert alert-success">
-                <i class="fas fa-check-circle"></i> <?php echo $success_message; ?>
-            </div>
-        <?php endif; ?>
-        
-        <form id="sales-form" method="POST" action="">
-            <div class="form-grid">
-                <div class="form-left">
-                    <!-- Product Selection -->
-                    <div class="form-group">
-                        <label for="product-search"><i class="fas fa-tshirt"></i> Select Jersey, Cap or Shorts *</label>
-                        <div class="searchable-dropdown-container">
-                            <div class="searchable-dropdown" id="productDropdown">
-                                <input type="text" 
-                                       id="product-search" 
-                                       class="dropdown-input" 
-                                       placeholder="Type to search or click to browse products..." 
-                                       autocomplete="off"
-                                       readonly>
-                                <div class="dropdown-arrow" id="dropdownArrow">
-                                    <i class="fas fa-chevron-down"></i>
-                                </div>
-                                
-                                <div class="dropdown-menu" id="dropdownMenu">
-                                    <div class="search-header">
-                                        <input type="text" 
-                                               id="search-filter" 
-                                               class="search-input" 
-                                               placeholder="Search products..."
-                                               autocomplete="off">
-                                    </div>
-                                    
-                                    <div class="options-list" id="optionsList">
-                                        <div class="option-item placeholder" data-value="" data-name="">
-                                            <div class="option-content">
-                                                <div class="product-name">Choose a product...</div>
-                                            </div>
-                                        </div>
-                                        
-                                        <?php while ($product = $products->fetch_assoc()): ?>
-                                        <div class="option-item" 
-                                             data-value="<?php echo $product['product_id']; ?>"
-                                             data-name="<?php echo htmlspecialchars($product['name']); ?>"
-                                             data-price="<?php echo $product['price']; ?>"
-                                             data-stock="<?php echo $product['stock_quantity']; ?>"
-                                             data-search="<?php echo strtolower(htmlspecialchars($product['name'])); ?>">
-                                            <div class="option-content">
-                                                <div class="product-info">
-                                                    <div class="product-name"><?php echo htmlspecialchars($product['name']); ?></div>
-                                                    <div class="product-price">Suggested: <?php echo number_format($product['price']); ?> TZS</div>
-                                                </div>
-                                                <div class="stock-info">
-                                                    <span class="stock-badge <?php 
-                                                        echo $product['stock_quantity'] > 20 ? 'high' : 
-                                                            ($product['stock_quantity'] > 0 ? 'low' : 'out'); 
-                                                    ?>">
-                                                        <?php echo number_format($product['stock_quantity']); ?> in stock
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <?php endwhile; ?>
-                                    </div>
-                                    
-                                    <div class="no-results" id="noResults" style="display: none;">
-                                        <i class="fas fa-search"></i>
-                                        <span>No products found</span>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Hidden select for form submission -->
-                            <select id="product_id" name="product_id" style="display: none;" required>
-                                <option value="">Choose Product</option>
-                                <?php 
-                                $products->data_seek(0);
-                                while ($product = $products->fetch_assoc()): 
-                                ?>
-                                    <option value="<?php echo $product['product_id']; ?>" 
-                                            data-price="<?php echo $product['price']; ?>"
-                                            data-stock="<?php echo $product['stock_quantity']; ?>">
-                                        <?php echo htmlspecialchars($product['name']); ?>
-                                    </option>
-                                <?php endwhile; ?>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <!-- Quantity Input -->
-                    <div class="form-group">
-                        <label for="quantity"><i class="fas fa-sort-numeric-up"></i> Quantity *</label>
-                        <input type="number" 
-                               id="quantity" 
-                               name="quantity" 
-                               class="form-control" 
-                               min="1" 
-                               required 
-                               placeholder="Enter quantity">
-                        <div id="stock-warning" class="stock-warning" style="display: none;">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            <span class="warning-text"></span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="form-right">
-                    <!-- Unit Price Input -->
-                    <div class="form-group">
-                        <label for="unit_price"><i class="fas fa-money-bill-wave"></i> Unit Price (TZS) *</label>
-                        <input type="text" 
-                               id="unit_price" 
-                               name="unit_price" 
-                               class="form-control price-input" 
-                               required 
-                               placeholder="Enter unit price">
-                        <div id="suggested-price" class="suggested-price" style="display: none;">
-                            <i class="fas fa-lightbulb"></i>
-                            <span>Suggested: <span id="suggested-price-value"></span></span>
-                        </div>
-                    </div>
-                    
-                    <!-- Payment Method Selection -->
-                    <div class="form-group">
-                        <label for="payment_method"><i class="fas fa-credit-card"></i> Payment Method *</label>
-                        <div class="payment-methods" id="paymentMethods">
-                            <div class="payment-option" data-method="LIPA NUMBER">
-                                <input type="radio" id="lipa" name="payment_method" value="LIPA NUMBER" required>
-                                <label for="lipa" class="payment-label">
-                                    <div class="payment-icon">
-                                        <i class="fas fa-mobile-alt"></i>
-                                    </div>
-                                    <div class="payment-info">
-                                        <div class="payment-name">LIPA NUMBER</div>
-                                        <div class="payment-desc">Mobile Money</div>
-                                    </div>
-                                </label>
-                            </div>
-                            
-                            <div class="payment-option" data-method="CASH">
-                                <input type="radio" id="cash" name="payment_method" value="CASH" required>
-                                <label for="cash" class="payment-label">
-                                    <div class="payment-icon">
-                                        <i class="fas fa-money-bill-wave"></i>
-                                    </div>
-                                    <div class="payment-info">
-                                        <div class="payment-name">CASH</div>
-                                        <div class="payment-desc">Cash Payment</div>
-                                    </div>
-                                </label>
-                            </div>
-                            
-                            <div class="payment-option" data-method="CRDB BANK">
-                                <input type="radio" id="crdb" name="payment_method" value="CRDB BANK" required>
-                                <label for="crdb" class="payment-label">
-                                    <div class="payment-icon">
-                                        <i class="fas fa-university"></i>
-                                    </div>
-                                    <div class="payment-info">
-                                        <div class="payment-name">CRDB BANK</div>
-                                        <div class="payment-desc">Bank Transfer</div>
-                                    </div>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Total Amount Display -->
-                    <div class="form-group">
-                        <label><i class="fas fa-calculator"></i> Total Amount</label>
-                        <div id="total-display" class="total-display">
-                            0 TZS
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="form-actions">
-                <button type="submit" class="btn btn-success" id="submit-btn" disabled>
-                    <i class="fas fa-shopping-cart"></i> Complete Sale
-                </button>
-                <button type="button" class="btn btn-secondary" id="reset-btn">
-                    <i class="fas fa-redo"></i> Reset Form
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- Today's Sales Statistics -->
-<div class="card">
-    <div class="card-header">
-        <h3><i class="fas fa-chart-bar"></i> Today's Sales Statistics</h3>
-    </div>
-    <div class="card-body">
-        <div class="stats-container">
-            <div class="stat-box">
-                <div class="stat-icon">
-                    <i class="fas fa-shopping-cart"></i>
-                </div>
-                <div class="stat-content">
-                    <div class="stat-value">
-                        <?php
-                        $stmt = $conn->query("SELECT COUNT(*) FROM sales WHERE DATE(sale_date) = CURDATE()");
-                        echo number_format($stmt->fetch_row()[0]);
-                        ?>
-                    </div>
-                    <div class="stat-label">Total Sales</div>
-                </div>
-            </div>
-            
-            <div class="stat-box">
-                <div class="stat-icon">
-                    <i class="fas fa-coins"></i>
-                </div>
-                <div class="stat-content">
-                    <div class="stat-value">
-                        <?php
-                        $stmt = $conn->query("SELECT SUM(total_price) FROM sales WHERE DATE(sale_date) = CURDATE()");
-                        echo number_format($stmt->fetch_row()[0] ?? 0);
-                        ?> TZS
-                    </div>
-                    <div class="stat-label">Revenue</div>
-                </div>
-            </div>
-            
-            <div class="stat-box">
-                <div class="stat-icon">
-                    <i class="fas fa-box"></i>
-                </div>
-                <div class="stat-content">
-                    <div class="stat-value">
-                        <?php
-                        $stmt = $conn->query("SELECT SUM(quantity) FROM sales WHERE DATE(sale_date) = CURDATE()");
-                        echo number_format($stmt->fetch_row()[0] ?? 0);
-                        ?>
-                    </div>
-                    <div class="stat-label">Items Sold</div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Popular Items Today -->
-<div class="card">
-    <div class="card-header">
-        <h3><i class="fas fa-fire"></i> Popular Items Today</h3>
-    </div>
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Product</th>
-                        <th>Units Sold</th>
-                        <th>Revenue</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php
-                    $stmt = $conn->query("
-                        SELECT p.name, SUM(s.quantity) as units_sold, SUM(s.total_price) as revenue
-                        FROM sales s 
-                        JOIN products p ON s.product_id = p.product_id 
-                        WHERE DATE(s.sale_date) = CURDATE()
-                        GROUP BY p.product_id, p.name
-                        ORDER BY units_sold DESC
-                        LIMIT 5
-                    ");
-                    
-                    if ($stmt->num_rows > 0):
-                        while ($row = $stmt->fetch_assoc()):
-                    ?>
-                    <tr>
-                        <td><?php echo htmlspecialchars($row['name']); ?></td>
-                        <td><?php echo number_format($row['units_sold']); ?></td>
-                        <td class="text-success"><?php echo number_format($row['revenue']); ?> TZS</td>
-                    </tr>
-                    <?php 
-                        endwhile;
-                    else: 
-                    ?>
-                    <tr>
-                        <td colspan="3" class="text-center text-muted">No sales recorded today</td>
-                    </tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
 <style>
-/* Form Layout */
-.form-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
-    margin-bottom: 2rem;
+/* Reset and Base Styles */
+* {
+    box-sizing: border-box;
 }
 
+body {
+    overflow: hidden;
+}
+
+.sales-container {
+    height: 100vh;
+    padding: 0.75rem;
+    background: transparent;
+    overflow: hidden;
+}
+
+/* Main Layout Grid */
+.sales-layout {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 1rem;
+    height: calc(100vh - 1.5rem);
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* Left Panel - Sale Form */
+.sale-form-panel {
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(12px);
+    border-radius: 16px;
+    padding: 1.25rem;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Right Panel - Summary */
+.sale-summary-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    overflow: hidden;
+}
+
+.summary-card {
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(12px);
+    border-radius: 12px;
+    padding: 1rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Header */
+.panel-header {
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid #f0f4f8;
+}
+
+.panel-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #2d3748;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.panel-title i {
+    color: #667eea;
+    font-size: 1.3rem;
+}
+
+/* Summary Card Headers */
+.summary-card h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #2d3748;
+    margin: 0 0 0.75rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.summary-card h3 i {
+    color: #667eea;
+    font-size: 0.9rem;
+}
+
+/* Alerts */
+.alert {
+    padding: 0.75rem;
+    border-radius: 10px;
+    margin-bottom: 0.75rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    animation: slideIn 0.3s ease;
+    font-size: 0.9rem;
+}
+
+.alert-success {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));
+    color: #047857;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.alert-danger {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.05));
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* Form Layout */
+.form-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    overflow: visible;
+    min-height: 0;
+}
+
+/* Form Groups */
 .form-group {
-    margin-bottom: 1.5rem;
+    position: relative;
 }
 
 .form-group label {
     display: block;
-    margin-bottom: 0.5rem;
     font-weight: 600;
-    color: #2c3e50;
+    color: #374151;
+    margin-bottom: 0.4rem;
+    font-size: 0.85rem;
 }
 
 .form-control {
     width: 100%;
-    padding: 0.75rem;
-    border: 2px solid #e1e8ed;
-    border-radius: 8px;
-    font-size: 1rem;
-    transition: all 0.3s ease;
-    background: rgba(255, 255, 255, 0.9);
+    padding: 0.7rem 0.9rem;
+    border: 2px solid #e5e7eb;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: rgba(255, 255, 255, 0.8);
 }
 
 .form-control:focus {
     outline: none;
     border-color: #667eea;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    transform: translateY(-2px);
+    transform: translateY(-1px);
+    background: white;
 }
 
-/* Searchable Dropdown */
-.searchable-dropdown-container {
+/* Product Search */
+.product-search-container {
     position: relative;
 }
 
-.searchable-dropdown {
-    position: relative;
-    cursor: pointer;
-}
-
-.dropdown-input {
-    cursor: pointer;
-    padding-right: 3rem;
-}
-
-.dropdown-input:focus {
-    cursor: text;
-}
-
-.dropdown-arrow {
-    position: absolute;
-    right: 1rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: #6c757d;
-    transition: transform 0.3s ease;
-    pointer-events: none;
-}
-
-.dropdown-arrow.open {
-    transform: translateY(-50%) rotate(180deg);
-}
-
-.dropdown-menu {
+.product-dropdown {
     position: absolute;
     top: 100%;
     left: 0;
     right: 0;
     background: white;
-    border: 2px solid #e1e8ed;
+    border: 2px solid #e5e7eb;
     border-top: none;
-    border-radius: 0 0 8px 8px;
-    max-height: 400px;
-    overflow: hidden;
-    z-index: 1000;
+    border-radius: 0 0 10px 10px;
+    max-height: 150px;
+    overflow-y: auto;
+    z-index: 100;
     display: none;
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
 }
 
-.dropdown-menu.show {
+.product-dropdown.show {
     display: block;
     animation: dropdownSlide 0.2s ease;
 }
 
-@keyframes dropdownSlide {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.search-header {
-    padding: 0.75rem;
-    border-bottom: 1px solid #f0f0f0;
-    background: #f8f9fa;
-}
-
-.search-input {
-    width: 100%;
-    padding: 0.5rem;
-    border: 1px solid #e1e8ed;
-    border-radius: 6px;
-    font-size: 0.9rem;
-    outline: none;
-}
-
-.search-input:focus {
-    border-color: #667eea;
-    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
-}
-
-.options-list {
-    max-height: 300px;
-    overflow-y: auto;
-}
-
-.option-item {
-    padding: 1rem;
+.product-option {
+    padding: 0.7rem 0.9rem;
     cursor: pointer;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid #f3f4f6;
     transition: all 0.2s ease;
-}
-
-.option-item:last-child {
-    border-bottom: none;
-}
-
-.option-item:hover,
-.option-item.focused {
-    background: rgba(102, 126, 234, 0.08);
-}
-
-.option-item.selected {
-    background: rgba(102, 126, 234, 0.15);
-    color: #667eea;
-}
-
-.option-item.placeholder {
-    color: #6c757d;
-    font-style: italic;
-}
-
-.option-content {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 1rem;
+}
+
+.product-option:hover,
+.product-option.focused {
+    background: rgba(102, 126, 234, 0.08);
+}
+
+.product-option.selected {
+    background: rgba(102, 126, 234, 0.15);
+    color: #667eea;
+    font-weight: 600;
 }
 
 .product-info {
@@ -564,60 +298,39 @@ $products = $conn->query("SELECT product_id, name, price, stock_quantity FROM pr
 
 .product-name {
     font-weight: 600;
-    margin-bottom: 0.25rem;
-    line-height: 1.3;
+    margin-bottom: 0.2rem;
+    font-size: 0.9rem;
 }
 
 .product-price {
-    font-size: 0.9rem;
-    color: #28a745;
+    font-size: 0.8rem;
+    color: #10b981;
     font-weight: 500;
 }
 
-.stock-info {
-    flex-shrink: 0;
-}
-
 .stock-badge {
-    padding: 0.25rem 0.5rem;
-    border-radius: 12px;
-    font-size: 0.75rem;
+    padding: 0.2rem 0.4rem;
+    border-radius: 6px;
+    font-size: 0.7rem;
     font-weight: 600;
-    text-transform: uppercase;
 }
 
-.stock-badge.high {
-    background: rgba(40, 167, 69, 0.15);
-    color: #28a745;
-}
+.stock-badge.high { background: rgba(16, 185, 129, 0.15); color: #059669; }
+.stock-badge.low { background: rgba(245, 158, 11, 0.15); color: #d97706; }
+.stock-badge.out { background: rgba(239, 68, 68, 0.15); color: #dc2626; }
 
-.stock-badge.low {
-    background: rgba(255, 193, 7, 0.15);
-    color: #e67e22;
-}
-
-.stock-badge.out {
-    background: rgba(220, 53, 69, 0.15);
-    color: #dc3545;
-}
-
-.no-results {
-    padding: 3rem 2rem;
-    text-align: center;
-    color: #6c757d;
-}
-
-.no-results i {
-    font-size: 2rem;
-    margin-bottom: 1rem;
-    opacity: 0.3;
+/* Quantity and Price Row */
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
 }
 
 /* Payment Methods */
 .payment-methods {
     display: grid;
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
 }
 
 .payment-option {
@@ -633,14 +346,17 @@ $products = $conn->query("SELECT product_id, name, price, stock_quantity FROM pr
 
 .payment-label {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    padding: 1rem;
-    border: 2px solid #e1e8ed;
-    border-radius: 8px;
+    padding: 0.75rem 0.4rem;
+    border: 2px solid #e5e7eb;
+    border-radius: 10px;
     cursor: pointer;
     transition: all 0.3s ease;
-    background: rgba(255, 255, 255, 0.9);
-    gap: 1rem;
+    background: rgba(255, 255, 255, 0.8);
+    text-align: center;
+    min-height: 65px;
+    justify-content: center;
 }
 
 .payment-label:hover {
@@ -655,695 +371,762 @@ $products = $conn->query("SELECT product_id, name, price, stock_quantity FROM pr
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
-.payment-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.2rem;
-    flex-shrink: 0;
-    transition: all 0.3s ease;
+.payment-option.payment-selected .payment-label {
+    border-color: #10b981;
+    background: rgba(16, 185, 129, 0.15);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
 }
 
-.payment-option[data-method="LIPA NUMBER"] .payment-icon {
-    background: linear-gradient(135deg, #10b981, #059669);
-    color: white;
-}
-
-.payment-option[data-method="CASH"] .payment-icon {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
-    color: white;
-}
-
-.payment-option[data-method="CRDB BANK"] .payment-icon {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-    color: white;
-}
-
-.payment-info {
-    flex: 1;
-}
-
-.payment-name {
-    font-weight: 600;
-    font-size: 1rem;
-    color: #333;
-    margin-bottom: 0.25rem;
-}
-
-.payment-desc {
-    font-size: 0.85rem;
-    color: #6c757d;
-}
-
-.payment-option input[type="radio"]:checked + .payment-label .payment-name {
-    color: #667eea;
-}
-
-.payment-option input[type="radio"]:checked + .payment-label .payment-icon {
+.payment-option.payment-selected .payment-icon {
+    color: #10b981;
     transform: scale(1.1);
 }
 
-/* Price Input */
-.price-input {
-    font-family: 'Courier New', monospace;
-    text-align: right;
-    font-size: 1.1rem;
+.payment-option.payment-selected .payment-name {
+    color: #059669;
+    font-weight: 700;
 }
 
-/* Suggested Price */
-.suggested-price {
-    margin-top: 0.5rem;
-    padding: 0.5rem;
-    background: rgba(255, 193, 7, 0.1);
-    border-radius: 6px;
-    font-size: 0.85rem;
-    color: #856404;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    animation: fadeIn 0.3s ease;
+.payment-icon {
+    font-size: 1.2rem;
+    margin-bottom: 0.4rem;
+    color: #667eea;
 }
 
-.suggested-price i {
-    color: #ffc107;
-}
-
-.suggested-price span span {
+.payment-name {
+    font-size: 0.75rem;
     font-weight: 600;
-    color: #28a745;
+    color: #374151;
 }
 
-/* Stock Warning */
-.stock-warning {
-    margin-top: 0.5rem;
-    padding: 0.5rem;
-    background: rgba(220, 53, 69, 0.1);
-    border-radius: 6px;
-    font-size: 0.85rem;
-    color: #721c24;
+/* Action Buttons */
+.form-actions {
+    display: flex;
+    gap: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 2px solid #f0f4f8;
+    margin-top: auto;
+}
+
+.btn {
+    padding: 0.8rem 1.5rem;
+    border: none;
+    border-radius: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.5rem;
-    animation: pulse 2s infinite;
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
 }
 
-.stock-warning i {
-    color: #dc3545;
+.btn-primary {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: white;
+    flex: 1;
+    min-height: 50px;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+    font-weight: 800;
 }
 
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+    background: linear-gradient(135deg, #059669, #047857);
+}
+
+.btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    background: #94a3b8;
+}
+
+.btn-secondary {
+    background: rgba(107, 114, 128, 0.1);
+    color: #6b7280;
+    border: 2px solid #e5e7eb;
+    min-width: 100px;
+    min-height: 50px;
+}
+
+.btn-secondary:hover {
+    background: rgba(107, 114, 128, 0.15);
+    border-color: #d1d5db;
 }
 
 /* Total Display */
 .total-display {
-    padding: 1rem;
-    background: linear-gradient(135deg, rgba(46, 204, 113, 0.1), rgba(46, 204, 113, 0.05));
-    border: 2px solid #2ecc71;
-    border-radius: 12px;
-    font-size: 1.8rem;
-    font-weight: bold;
-    color: #2ecc71;
     text-align: center;
-    transition: all 0.3s ease;
-}
-
-.total-display.updating {
-    transform: scale(1.05);
-}
-
-/* Form Actions */
-.form-actions {
-    margin-top: 2rem;
-    padding-top: 2rem;
-    border-top: 1px solid #e1e8ed;
-    display: flex;
-    gap: 1rem;
-}
-
-.btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    border: none;
-    border-radius: 8px;
-    font-size: 1rem;
-    font-weight: 600;
-    text-decoration: none;
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.btn-success {
-    background: linear-gradient(135deg, #2ecc71, #27ae60);
-    color: white;
-}
-
-.btn-success:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(46, 204, 113, 0.4);
-}
-
-.btn-success:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none;
-}
-
-.btn-secondary {
-    background: linear-gradient(135deg, #95a5a6, #7f8c8d);
-    color: white;
-}
-
-.btn-secondary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(149, 165, 166, 0.4);
-}
-
-/* Stats Container */
-.stats-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1.5rem;
-}
-
-.stat-box {
-    display: flex;
-    align-items: center;
-    padding: 1.5rem;
-    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(102, 126, 234, 0.05));
+    padding: 1rem;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));
+    border: 2px solid rgba(16, 185, 129, 0.2);
     border-radius: 12px;
-    border-left: 4px solid #667eea;
-    transition: transform 0.2s ease;
 }
 
-.stat-box:hover {
-    transform: translateY(-2px);
+.total-label {
+    font-size: 0.85rem;
+    color: #6b7280;
+    margin-bottom: 0.4rem;
+    font-weight: 500;
 }
 
-.stat-icon {
-    width: 50px;
-    height: 50px;
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-size: 1.2rem;
-    margin-right: 1rem;
-}
-
-.stat-value {
+.total-amount {
     font-size: 1.8rem;
-    font-weight: bold;
-    color: #333;
-    line-height: 1;
-    margin-bottom: 0.25rem;
+    font-weight: 800;
+    color: #059669;
+    margin: 0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Stats Grid */
+.stats-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem;
+    background: rgba(102, 126, 234, 0.04);
+    border-radius: 8px;
+    border: 1px solid rgba(102, 126, 234, 0.1);
 }
 
 .stat-label {
-    color: #6c757d;
-    font-size: 0.9rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font-size: 0.8rem;
+    color: #6b7280;
+    font-weight: 500;
+}
+
+.stat-value {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #2d3748;
+}
+
+/* Quick Actions */
+.quick-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.quick-actions .btn {
+    padding: 0.6rem;
+    font-size: 0.8rem;
+    min-height: auto;
+}
+
+/* Input Helpers */
+.input-helper {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.2rem;
+    padding: 0.3rem 0.6rem;
+    background: rgba(102, 126, 234, 0.1);
+    border-radius: 5px;
+    font-size: 0.75rem;
+    color: #667eea;
+    font-weight: 500;
+    display: none;
+}
+
+.input-helper.show {
+    display: block;
+    animation: fadeIn 0.2s ease;
+}
+
+.form-group:focus-within .input-helper:not(#stockHelper) {
+    display: block;
+    animation: fadeIn 0.2s ease;
 }
 
 /* Responsive Design */
-@media (max-width: 768px) {
-    .form-grid {
+@media (max-width: 1200px) {
+    .sales-layout {
+        grid-template-columns: 1fr 280px;
+    }
+}
+
+@media (max-width: 968px) {
+    .sales-layout {
         grid-template-columns: 1fr;
-        gap: 1rem;
+        grid-template-rows: 1fr auto;
+        gap: 0.75rem;
     }
     
-    .stats-container {
+    .sale-summary-panel {
+        flex-direction: row;
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
+    
+    .summary-card {
+        min-width: 200px;
+        flex-shrink: 0;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .payment-methods {
         grid-template-columns: 1fr;
     }
     
-    .option-content {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.5rem;
+    .quick-actions {
+        flex-direction: row;
+    }
+}
+
+@media (max-width: 640px) {
+    .sales-container {
+        padding: 0.5rem;
     }
     
-    .stock-info {
-        width: 100%;
+    .sales-layout {
+        height: calc(100vh - 1rem);
     }
     
-    .form-actions {
-        flex-direction: column;
+    .sale-form-panel,
+    .summary-card {
+        padding: 0.75rem;
     }
     
-    .total-display {
-        font-size: 1.5rem;
+    .panel-title {
+        font-size: 1.3rem;
     }
 }
 
 /* Animations */
-@keyframes fadeIn {
+@keyframes slideIn {
     from { opacity: 0; transform: translateY(-10px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* Scrollbar */
-.options-list::-webkit-scrollbar {
-    width: 6px;
+@keyframes dropdownSlide {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-.options-list::-webkit-scrollbar-track {
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideOut {
+    from { opacity: 1; transform: translateX(0); }
+    to { opacity: 0; transform: translateX(100%); }
+}
+
+/* Scrollbar Styling */
+.product-dropdown::-webkit-scrollbar {
+    width: 4px;
+}
+
+.product-dropdown::-webkit-scrollbar-track {
     background: #f1f1f1;
+    border-radius: 2px;
 }
 
-.options-list::-webkit-scrollbar-thumb {
+.product-dropdown::-webkit-scrollbar-thumb {
     background: #c1c1c1;
-    border-radius: 3px;
+    border-radius: 2px;
 }
 
-.options-list::-webkit-scrollbar-thumb:hover {
+.product-dropdown::-webkit-scrollbar-thumb:hover {
     background: #a8a8a8;
+}
+
+/* Focus Management */
+.form-control:focus,
+.payment-label:focus-within {
+    z-index: 1;
 }
 </style>
 
-<script>
-// Utility Functions
-function formatTZS(amount) {
-    return new Intl.NumberFormat('en-US').format(Math.round(amount)) + ' TZS';
-}
+<div class="sales-container">
+    <div class="sales-layout">
+        <!-- Left Panel - Sale Form -->
+        <div class="sale-form-panel">
+            <div class="panel-header">
+                <h1 class="panel-title">
+                    <i class="fas fa-shopping-cart"></i>
+                    Make Sale
+                </h1>
+            </div>
 
-function formatPrice(price) {
-    // Format price with commas, preserving cursor position
-    return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-}
-
-function parsePrice(priceString) {
-    // Remove commas and convert to number
-    return parseFloat(priceString.replace(/,/g, '')) || 0;
-}
-
-function addCommasToInput(input) {
-    let value = input.value.replace(/,/g, ''); // Remove existing commas
-    let cursorPos = input.selectionStart;
-    let valueBeforeCursor = input.value.substring(0, cursorPos).replace(/,/g, '');
-    
-    // Format with commas
-    let formattedValue = formatPrice(value);
-    
-    // Calculate new cursor position
-    let commasBeforeCursor = (valueBeforeCursor.match(/,/g) || []).length;
-    let newCommasBeforeCursor = (formattedValue.substring(0, valueBeforeCursor.length + commasBeforeCursor).match(/,/g) || []).length;
-    let newCursorPos = cursorPos + (newCommasBeforeCursor - commasBeforeCursor);
-    
-    // Update input
-    input.value = formattedValue;
-    input.setSelectionRange(newCursorPos, newCursorPos);
-}
-
-// Searchable Dropdown Class
-class SearchableDropdown {
-    constructor(containerId, hiddenSelectId) {
-        this.container = document.getElementById(containerId);
-        this.hiddenSelect = document.getElementById(hiddenSelectId);
-        this.input = document.getElementById('product-search');
-        this.arrow = document.getElementById('dropdownArrow');
-        this.menu = document.getElementById('dropdownMenu');
-        this.searchFilter = document.getElementById('search-filter');
-        this.optionsList = document.getElementById('optionsList');
-        this.noResults = document.getElementById('noResults');
-        
-        this.isOpen = false;
-        this.focusedIndex = -1;
-        this.selectedOption = null;
-        this.options = Array.from(this.optionsList.querySelectorAll('.option-item'));
-        this.filteredOptions = [];
-        
-        this.init();
-    }
-    
-    init() {
-        this.bindEvents();
-        this.updateFilteredOptions();
-    }
-    
-    bindEvents() {
-        // Input click to open dropdown
-        this.input.addEventListener('click', () => this.open());
-        
-        // Arrow click to toggle
-        this.arrow.addEventListener('click', () => this.toggle());
-        
-        // Search filter
-        this.searchFilter.addEventListener('input', (e) => this.filterOptions(e.target.value));
-        
-        // Option selection
-        this.optionsList.addEventListener('click', (e) => {
-            const option = e.target.closest('.option-item');
-            if (option) this.selectOption(option);
-        });
-        
-        // Keyboard navigation
-        this.searchFilter.addEventListener('keydown', (e) => this.handleKeyDown(e));
-        this.input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === 'ArrowDown') {
-                e.preventDefault();
-                this.open();
-            }
-        });
-        
-        // Close on outside click
-        document.addEventListener('click', (e) => {
-            if (!this.container.contains(e.target)) this.close();
-        });
-        
-        // Escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.isOpen) {
-                this.close();
-                this.input.focus();
-            }
-        });
-    }
-    
-    open() {
-        this.isOpen = true;
-        this.menu.classList.add('show');
-        this.arrow.classList.add('open');
-        this.searchFilter.value = '';
-        this.filterOptions('');
-        setTimeout(() => this.searchFilter.focus(), 100);
-    }
-    
-    close() {
-        this.isOpen = false;
-        this.menu.classList.remove('show');
-        this.arrow.classList.remove('open');
-        this.focusedIndex = -1;
-        this.updateFocusedOption();
-    }
-    
-    toggle() {
-        this.isOpen ? this.close() : this.open();
-    }
-    
-    filterOptions(searchTerm) {
-        this.filteredOptions = [];
-        let hasResults = false;
-        
-        this.options.forEach(option => {
-            const searchData = option.getAttribute('data-search') || '';
-            const name = option.getAttribute('data-name') || '';
-            const isPlaceholder = option.classList.contains('placeholder');
+            <?php if (!empty($errors)): ?>
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <?php echo implode(', ', $errors); ?>
+                </div>
+            <?php endif; ?>
             
-            if (isPlaceholder || 
-                searchData.includes(searchTerm.toLowerCase()) || 
-                name.toLowerCase().includes(searchTerm.toLowerCase())) {
-                option.style.display = 'block';
-                if (!isPlaceholder) {
-                    this.filteredOptions.push(option);
-                    hasResults = true;
-                }
-            } else {
-                option.style.display = 'none';
-            }
-        });
-        
-        this.noResults.style.display = (searchTerm && !hasResults) ? 'block' : 'none';
-        this.focusedIndex = -1;
-        this.updateFocusedOption();
-    }
-    
-    updateFilteredOptions() {
-        this.filteredOptions = this.options.filter(option => 
-            !option.classList.contains('placeholder') && 
-            option.style.display !== 'none'
-        );
-    }
-    
-    handleKeyDown(e) {
-        switch (e.key) {
-            case 'ArrowDown':
-                e.preventDefault();
-                this.focusNext();
-                break;
-            case 'ArrowUp':
-                e.preventDefault();
-                this.focusPrevious();
-                break;
-            case 'Enter':
-                e.preventDefault();
-                if (this.focusedIndex >= 0) {
-                    this.selectOption(this.filteredOptions[this.focusedIndex]);
-                }
-                break;
-            case 'Tab':
-                this.close();
-                break;
-        }
-    }
-    
-    focusNext() {
-        if (this.filteredOptions.length === 0) return;
-        this.focusedIndex = (this.focusedIndex + 1) % this.filteredOptions.length;
-        this.updateFocusedOption();
-    }
-    
-    focusPrevious() {
-        if (this.filteredOptions.length === 0) return;
-        this.focusedIndex = this.focusedIndex <= 0 ? 
-            this.filteredOptions.length - 1 : this.focusedIndex - 1;
-        this.updateFocusedOption();
-    }
-    
-    updateFocusedOption() {
-        this.options.forEach(option => option.classList.remove('focused'));
-        
-        if (this.focusedIndex >= 0 && this.filteredOptions[this.focusedIndex]) {
-            const focused = this.filteredOptions[this.focusedIndex];
-            focused.classList.add('focused');
-            focused.scrollIntoView({ block: 'nearest' });
-        }
-    }
-    
-    selectOption(option) {
-        const value = option.getAttribute('data-value');
-        const name = option.getAttribute('data-name');
-        
-        // Clear previous selection
-        this.options.forEach(opt => opt.classList.remove('selected'));
-        
-        if (value) {
-            option.classList.add('selected');
-            this.input.value = name;
-            this.selectedOption = option;
-        } else {
-            this.input.value = '';
-            this.selectedOption = null;
-        }
-        
-        // Update hidden select
-        this.hiddenSelect.value = value || '';
-        
-        // Trigger change event
-        this.hiddenSelect.dispatchEvent(new Event('change'));
-        
-        this.close();
-        
-        // Focus quantity input
-        if (value) {
-            document.getElementById('quantity').focus();
-        }
-    }
-    
-    reset() {
-        const placeholder = this.options.find(opt => opt.classList.contains('placeholder'));
-        if (placeholder) this.selectOption(placeholder);
-    }
-    
-    getValue() {
-        return this.hiddenSelect.value;
-    }
-    
-    getSelectedData() {
-        if (!this.selectedOption) return null;
-        
-        return {
-            value: this.selectedOption.getAttribute('data-value'),
-            name: this.selectedOption.getAttribute('data-name'),
-            price: this.selectedOption.getAttribute('data-price'),
-            stock: this.selectedOption.getAttribute('data-stock')
-        };
-    }
-}
+            <?php if ($success_message): ?>
+                <div class="alert alert-success">
+                    <i class="fas fa-check-circle"></i>
+                    <?php echo $success_message; ?>
+                </div>
+            <?php endif; ?>
 
-// Main Application
+            <form id="salesForm" method="POST" action="">
+                <div class="form-content">
+                    <!-- Product Selection -->
+                    <div class="form-group">
+                        <label for="product-search">
+                            <i class="fas fa-tshirt"></i> Select Product
+                        </label>
+                        <div class="product-search-container">
+                            <input type="text" 
+                                   id="product-search" 
+                                   class="form-control" 
+                                   placeholder="Click to search products..."
+                                   readonly>
+                            
+                            <div class="product-dropdown" id="productDropdown">
+                                <?php while ($product = $products->fetch_assoc()): ?>
+                                    <div class="product-option" 
+                                         data-value="<?php echo $product['product_id']; ?>"
+                                         data-name="<?php echo htmlspecialchars($product['name']); ?>"
+                                         data-price="<?php echo $product['price']; ?>"
+                                         data-stock="<?php echo $product['stock_quantity']; ?>">
+                                        <div class="product-info">
+                                            <div class="product-name"><?php echo htmlspecialchars($product['name']); ?></div>
+                                            <div class="product-price">Suggested: <?php echo number_format($product['price']); ?> TZS</div>
+                                        </div>
+                                        <div class="stock-badge <?php 
+                                            echo $product['stock_quantity'] > 20 ? 'high' : 
+                                                ($product['stock_quantity'] > 0 ? 'low' : 'out'); 
+                                        ?>">
+                                            <?php echo number_format($product['stock_quantity']); ?>
+                                        </div>
+                                    </div>
+                                <?php endwhile; ?>
+                            </div>
+                            
+                            <select id="product_id" name="product_id" style="display: none;" required>
+                                <option value="">Choose Product</option>
+                                <?php 
+                                $products->data_seek(0);
+                                while ($product = $products->fetch_assoc()): 
+                                ?>
+                                    <option value="<?php echo $product['product_id']; ?>" 
+                                            data-price="<?php echo $product['price']; ?>"
+                                            data-stock="<?php echo $product['stock_quantity']; ?>">
+                                        <?php echo htmlspecialchars($product['name']); ?>
+                                    </option>
+                                <?php endwhile; ?>
+                            </select>
+                        </div>
+                        <div class="input-helper">Start typing to search products</div>
+                    </div>
+
+                    <!-- Quantity and Price Row -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="quantity">
+                                <i class="fas fa-sort-numeric-up"></i> Quantity
+                            </label>
+                            <input type="number" 
+                                   id="quantity" 
+                                   name="quantity" 
+                                   class="form-control" 
+                                   min="1" 
+                                   required 
+                                   placeholder="Enter quantity">
+                            <div class="input-helper" id="stockHelper" style="display: none;">Available: 0 units</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="unit_price">
+                                <i class="fas fa-money-bill-wave"></i> Unit Price (TZS)
+                            </label>
+                            <input type="text" 
+                                   id="unit_price" 
+                                   name="unit_price" 
+                                   class="form-control" 
+                                   required 
+                                   placeholder="Enter price">
+                            <div class="input-helper">Use suggested or custom</div>
+                        </div>
+                    </div>
+
+                    <!-- Payment Method -->
+                    <div class="form-group">
+                        <label>
+                            <i class="fas fa-credit-card"></i> Payment Method
+                        </label>
+                        <div class="payment-methods">
+                            <div class="payment-option">
+                                <input type="radio" id="lipa" name="payment_method" value="LIPA NUMBER" required>
+                                <label for="lipa" class="payment-label">
+                                    <div class="payment-icon">
+                                        <i class="fas fa-mobile-alt"></i>
+                                    </div>
+                                    <div class="payment-name">LIPA</div>
+                                </label>
+                            </div>
+                            
+                            <div class="payment-option">
+                                <input type="radio" id="cash" name="payment_method" value="CASH" required>
+                                <label for="cash" class="payment-label">
+                                    <div class="payment-icon">
+                                        <i class="fas fa-money-bill-wave"></i>
+                                    </div>
+                                    <div class="payment-name">CASH</div>
+                                </label>
+                            </div>
+                            
+                            <div class="payment-option">
+                                <input type="radio" id="crdb" name="payment_method" value="CRDB BANK" required>
+                                <label for="crdb" class="payment-label">
+                                    <div class="payment-icon">
+                                        <i class="fas fa-university"></i>
+                                    </div>
+                                    <div class="payment-name">CRDB</div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
+                        <i class="fas fa-shopping-cart"></i>
+                        Complete Sale
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="resetBtn">
+                        <i class="fas fa-redo"></i>
+                        Reset
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Right Panel - Summary & Stats -->
+        <div class="sale-summary-panel">
+            <!-- Total Display -->
+            <div class="summary-card">
+                <div class="total-display">
+                    <div class="total-label">Total Amount</div>
+                    <div class="total-amount" id="totalAmount">0 TZS</div>
+                </div>
+            </div>
+
+            <!-- Today's Stats -->
+            <div class="summary-card">
+                <h3>
+                    <i class="fas fa-chart-line"></i>
+                    Today's Stats
+                </h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">Sales</span>
+                        <span class="stat-value"><?php echo number_format($today_sales); ?></span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Revenue</span>
+                        <span class="stat-value"><?php echo number_format($today_revenue); ?> TZS</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Items</span>
+                        <span class="stat-value"><?php echo number_format($today_items); ?></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="summary-card">
+                <h3>
+                    <i class="fas fa-bolt"></i>
+                    Quick Actions
+                </h3>
+                <div class="quick-actions">
+                    <a href="sales_history.php" class="btn btn-secondary">
+                        <i class="fas fa-history"></i>
+                        History
+                    </a>
+                    <a href="../reports/reports.php" class="btn btn-secondary">
+                        <i class="fas fa-chart-bar"></i>
+                        Reports
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
 document.addEventListener('DOMContentLoaded', function() {
     // Elements
-    const salesForm = document.getElementById('sales-form');
+    const productSearch = document.getElementById('product-search');
+    const productDropdown = document.getElementById('productDropdown');
+    const productSelect = document.getElementById('product_id');
     const quantityInput = document.getElementById('quantity');
     const unitPriceInput = document.getElementById('unit_price');
-    const totalDisplay = document.getElementById('total-display');
-    const stockWarning = document.getElementById('stock-warning');
-    const suggestedPrice = document.getElementById('suggested-price');
-    const suggestedPriceValue = document.getElementById('suggested-price-value');
-    const submitBtn = document.getElementById('submit-btn');
-    const resetBtn = document.getElementById('reset-btn');
+    const totalAmount = document.getElementById('totalAmount');
+    const submitBtn = document.getElementById('submitBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const form = document.getElementById('salesForm');
+    const stockHelper = document.getElementById('stockHelper');
     
-    // Initialize dropdown
-    const productDropdown = new SearchableDropdown('productDropdown', 'product_id');
-    
-    // Functions
+    let selectedProduct = null;
+
+    // Utility Functions
+    function formatTZS(amount) {
+        return new Intl.NumberFormat('en-US').format(Math.round(amount)) + ' TZS';
+    }
+
+    function formatPrice(price) {
+        return price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
+    function parsePrice(priceString) {
+        return parseFloat(priceString.replace(/,/g, '')) || 0;
+    }
+
     function calculateTotal() {
         const unitPrice = parsePrice(unitPriceInput.value);
         const quantity = parseInt(quantityInput.value) || 0;
         const total = unitPrice * quantity;
-        
-        totalDisplay.textContent = formatTZS(total);
-        
-        // Visual feedback
-        if (total > 0) {
-            totalDisplay.classList.add('updating');
-            setTimeout(() => totalDisplay.classList.remove('updating'), 200);
-        }
-    }
-    
-    function updateProductInfo() {
-        const selectedData = productDropdown.getSelectedData();
-        
-        if (selectedData && selectedData.value) {
-            const productPrice = parseFloat(selectedData.price);
-            const stock = parseInt(selectedData.stock);
-            
-            // Show suggested price
-            suggestedPriceValue.textContent = formatTZS(productPrice);
-            suggestedPrice.style.display = 'block';
-            
-            // Auto-fill unit price if empty
-            if (!unitPriceInput.value.trim()) {
-                unitPriceInput.value = formatPrice(productPrice);
-            }
-            
-            // Update quantity constraints
-            quantityInput.setAttribute('max', stock);
-            if (parseInt(quantityInput.value) > stock) {
-                quantityInput.value = stock;
-                showNotification(`Quantity adjusted to maximum available: ${stock}`, 'warning');
-            }
-            
-            updateStockWarning(stock);
-        } else {
-            suggestedPrice.style.display = 'none';
-            unitPriceInput.value = '';
-            stockWarning.style.display = 'none';
-            quantityInput.removeAttribute('max');
-        }
-        
-        calculateTotal();
+        totalAmount.textContent = formatTZS(total);
         updateSubmitButton();
     }
-    
-    function updateStockWarning(stock) {
-        const warningText = stockWarning.querySelector('.warning-text');
-        
-        if (stock <= 0) {
-            stockWarning.style.display = 'block';
-            warningText.textContent = 'Product is out of stock!';
-        } else if (stock <= 10) {
-            stockWarning.style.display = 'block';
-            warningText.textContent = `Only ${stock} units remaining`;
-        } else {
-            stockWarning.style.display = 'none';
-        }
-    }
-    
+
     function updateSubmitButton() {
-        const hasProduct = productDropdown.getValue() !== '';
+        const hasProduct = productSelect.value !== '';
         const hasQuantity = quantityInput.value !== '' && parseInt(quantityInput.value) > 0;
         const hasUnitPrice = unitPriceInput.value !== '' && parsePrice(unitPriceInput.value) > 0;
         const hasPaymentMethod = document.querySelector('input[name="payment_method"]:checked') !== null;
         
-        submitBtn.disabled = !(hasProduct && hasQuantity && hasUnitPrice && hasPaymentMethod);
-    }
-    
-    function validateForm() {
-        const selectedData = productDropdown.getSelectedData();
-        const quantity = parseInt(quantityInput.value) || 0;
-        const unitPrice = parsePrice(unitPriceInput.value);
-        const paymentMethod = document.querySelector('input[name="payment_method"]:checked');
+        const isValid = hasProduct && hasQuantity && hasUnitPrice && hasPaymentMethod;
         
-        if (!selectedData || !selectedData.value) {
+        submitBtn.disabled = !isValid;
+        
+        if (isValid) {
+            submitBtn.style.opacity = '1';
+            submitBtn.style.transform = 'scale(1)';
+            submitBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            submitBtn.innerHTML = '<i class="fas fa-shopping-cart"></i> Complete Sale';
+        } else {
+            submitBtn.style.opacity = '0.6';
+            submitBtn.style.transform = 'scale(0.98)';
+            submitBtn.style.background = '#94a3b8';
+            
+            // Show what's missing
+            if (!hasProduct) {
+                submitBtn.innerHTML = '<i class="fas fa-tshirt"></i> Select Product';
+            } else if (!hasQuantity) {
+                submitBtn.innerHTML = '<i class="fas fa-sort-numeric-up"></i> Enter Quantity';
+            } else if (!hasUnitPrice) {
+                submitBtn.innerHTML = '<i class="fas fa-money-bill-wave"></i> Enter Price';
+            } else if (!hasPaymentMethod) {
+                submitBtn.innerHTML = '<i class="fas fa-credit-card"></i> Select Payment';
+            }
+        }
+    }
+
+    function resetForm() {
+        productSearch.value = '';
+        productSelect.value = '';
+        quantityInput.value = '';
+        unitPriceInput.value = '';
+        totalAmount.textContent = '0 TZS';
+        stockHelper.style.display = 'none';
+        document.querySelectorAll('input[name="payment_method"]').forEach(radio => {
+            radio.checked = false;
+        });
+        document.querySelectorAll('.payment-option').forEach(option => {
+            option.classList.remove('payment-selected');
+        });
+        selectedProduct = null;
+        updateSubmitButton();
+        productSearch.focus();
+    }
+
+    // Product Search and Selection
+    productSearch.addEventListener('click', function() {
+        productDropdown.classList.add('show');
+    });
+
+    productDropdown.addEventListener('click', function(e) {
+        const option = e.target.closest('.product-option');
+        if (option) {
+            const value = option.getAttribute('data-value');
+            const name = option.getAttribute('data-name');
+            const price = option.getAttribute('data-price');
+            const stock = option.getAttribute('data-stock');
+            
+            productSearch.value = name;
+            productSelect.value = value;
+            selectedProduct = { value, name, price, stock };
+            
+            // Update UI
+            productDropdown.classList.remove('show');
+            quantityInput.setAttribute('max', stock);
+            unitPriceInput.value = formatPrice(price);
+            
+            // Show stock helper
+            stockHelper.textContent = `Available: ${parseInt(stock)} units`;
+            stockHelper.style.display = 'block';
+            
+            calculateTotal();
+            quantityInput.focus();
+        }
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.product-search-container')) {
+            productDropdown.classList.remove('show');
+        }
+    });
+
+    // Quantity Input
+    quantityInput.addEventListener('input', function() {
+        if (selectedProduct) {
+            const stock = parseInt(selectedProduct.stock);
+            const quantity = parseInt(this.value);
+            
+            if (quantity > stock) {
+                this.value = stock;
+                showNotification(`Maximum available: ${stock}`, 'warning');
+            }
+        }
+        calculateTotal();
+    });
+
+    // Unit Price Input with formatting
+    unitPriceInput.addEventListener('input', function() {
+        let value = this.value.replace(/[^\d.,]/g, '');
+        let parts = value.split('.');
+        if (parts.length > 2) {
+            value = parts[0] + '.' + parts.slice(1).join('');
+        }
+        
+        // Add commas
+        const cursorPos = this.selectionStart;
+        const valueBeforeCursor = this.value.substring(0, cursorPos).replace(/,/g, '');
+        const formattedValue = formatPrice(value);
+        const commasBeforeCursor = (valueBeforeCursor.match(/,/g) || []).length;
+        const newCommasBeforeCursor = (formattedValue.substring(0, valueBeforeCursor.length + commasBeforeCursor).match(/,/g) || []).length;
+        const newCursorPos = cursorPos + (newCommasBeforeCursor - commasBeforeCursor);
+        
+        this.value = formattedValue;
+        this.setSelectionRange(newCursorPos, newCursorPos);
+        
+        calculateTotal();
+    });
+
+    // Payment method selection
+    document.querySelectorAll('input[name="payment_method"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            updateSubmitButton();
+            
+            // Visual feedback for payment method selection
+            document.querySelectorAll('.payment-option').forEach(option => {
+                option.classList.remove('payment-selected');
+            });
+            this.closest('.payment-option').classList.add('payment-selected');
+            
+            // Show confirmation of payment method selection
+            const paymentMethod = this.value;
+            showNotification(`Payment: ${paymentMethod}`, 'success');
+        });
+    });
+
+    // Reset button
+    resetBtn.addEventListener('click', resetForm);
+
+    // Form submission
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        if (!selectedProduct) {
             showNotification('Please select a product', 'error');
-            return false;
+            return;
         }
         
-        if (quantity <= 0) {
-            showNotification('Please enter a valid quantity', 'error');
-            quantityInput.focus();
-            return false;
-        }
-        
-        if (unitPrice <= 0) {
-            showNotification('Please enter a valid unit price', 'error');
-            unitPriceInput.focus();
-            return false;
-        }
-        
-        if (!paymentMethod) {
-            showNotification('Please select a payment method', 'error');
-            document.getElementById('paymentMethods').scrollIntoView({ behavior: 'smooth', block: 'center' });
-            return false;
-        }
-        
-        const stock = parseInt(selectedData.stock);
-        if (quantity > stock) {
-            showNotification(`Not enough stock available. Maximum: ${stock}`, 'error');
-            quantityInput.focus();
-            return false;
-        }
-        
-        return true;
-    }
-    
-    function confirmSale() {
-        const selectedData = productDropdown.getSelectedData();
         const quantity = parseInt(quantityInput.value);
         const unitPrice = parsePrice(unitPriceInput.value);
         const total = unitPrice * quantity;
         const paymentMethod = document.querySelector('input[name="payment_method"]:checked').value;
         
-        return confirm(`Confirm sale:
+        if (quantity > parseInt(selectedProduct.stock)) {
+            showNotification(`Not enough stock. Max: ${selectedProduct.stock}`, 'error');
+            return;
+        }
+        
+        const confirmed = confirm(`Confirm Sale:
 
-Product: ${selectedData.name}
+Product: ${selectedProduct.name}
 Quantity: ${quantity}
 Unit Price: ${formatTZS(unitPrice)}
-Total Amount: ${formatTZS(total)}
-Payment Method: ${paymentMethod}
+Total: ${formatTZS(total)}
+Payment: ${paymentMethod}
 
-Proceed with this sale?`);
-    }
-    
-    function resetForm() {
-        productDropdown.reset();
-        quantityInput.value = '';
-        unitPriceInput.value = '';
-        totalDisplay.textContent = '0 TZS';
-        stockWarning.style.display = 'none';
-        suggestedPrice.style.display = 'none';
+Proceed?`);
         
-        // Reset payment method selection
-        document.querySelectorAll('input[name="payment_method"]').forEach(radio => {
-            radio.checked = false;
-        });
-        
-        updateSubmitButton();
-        
-        // Focus product search
-        document.getElementById('product-search').focus();
-    }
-    
+        if (confirmed) {
+            // Show loading state
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+            submitBtn.disabled = true;
+            
+            // Clean unit price for submission
+            const cleanPrice = parsePrice(unitPriceInput.value);
+            const formData = new FormData(this);
+            formData.set('unit_price', cleanPrice.toString());
+            
+            // Submit form
+            fetch(this.action || window.location.href, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(html => {
+                document.documentElement.innerHTML = html;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                submitBtn.innerHTML = '<i class="fas fa-shopping-cart"></i> Complete Sale';
+                submitBtn.disabled = false;
+                showNotification('Error processing sale. Please try again.', 'error');
+            });
+        }
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'F2') {
+            e.preventDefault();
+            productSearch.focus();
+        }
+        if (e.key === 'F3') {
+            e.preventDefault();
+            quantityInput.focus();
+        }
+        if (e.key === 'F4') {
+            e.preventDefault();
+            unitPriceInput.focus();
+        }
+        if (e.ctrlKey && e.key === 'r') {
+            e.preventDefault();
+            resetForm();
+        }
+    });
+
+    // Notification function
     function showNotification(message, type = 'info') {
         const notification = document.createElement('div');
         notification.className = `alert alert-${type}`;
@@ -1353,9 +1136,10 @@ Proceed with this sale?`);
             top: 20px;
             right: 20px;
             z-index: 9999;
-            min-width: 300px;
+            min-width: 250px;
             animation: slideIn 0.3s ease;
             cursor: pointer;
+            font-size: 0.85rem;
         `;
         
         document.body.appendChild(notification);
@@ -1363,14 +1147,14 @@ Proceed with this sale?`);
         setTimeout(() => {
             notification.style.animation = 'slideOut 0.3s ease';
             setTimeout(() => notification.remove(), 300);
-        }, 4000);
+        }, 3000);
         
         notification.addEventListener('click', () => {
             notification.style.animation = 'slideOut 0.3s ease';
             setTimeout(() => notification.remove(), 300);
         });
     }
-    
+
     function getIconForType(type) {
         const icons = {
             success: 'check-circle',
@@ -1380,255 +1164,10 @@ Proceed with this sale?`);
         };
         return icons[type] || 'info-circle';
     }
-    
-    // Event Listeners
-    
-    // Product selection change
-    document.getElementById('product_id').addEventListener('change', updateProductInfo);
-    
-    // Quantity input
-    quantityInput.addEventListener('input', function() {
-        const selectedData = productDropdown.getSelectedData();
-        if (selectedData) {
-            const stock = parseInt(selectedData.stock);
-            const quantity = parseInt(this.value);
-            
-            if (quantity > stock) {
-                this.value = stock;
-                showNotification(`Maximum available: ${stock}`, 'warning');
-            }
-            
-            updateStockWarning(stock);
-        }
-        
-        calculateTotal();
-        updateSubmitButton();
-    });
-    
-    quantityInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            unitPriceInput.focus();
-        }
-    });
-    
-    // Unit price input with real-time comma formatting
-    unitPriceInput.addEventListener('input', function(e) {
-        // Only allow numbers, commas, and decimal points
-        let value = this.value.replace(/[^\d.,]/g, '');
-        
-        // Handle multiple decimal points
-        let parts = value.split('.');
-        if (parts.length > 2) {
-            value = parts[0] + '.' + parts.slice(1).join('');
-        }
-        
-        // Add commas as user types
-        addCommasToInput(this);
-        
-        calculateTotal();
-        updateSubmitButton();
-    });
-    
-    unitPriceInput.addEventListener('keydown', function(e) {
-        // Allow navigation and editing keys
-        const allowedKeys = [
-            'Backspace', 'Delete', 'Tab', 'Escape', 'Enter',
-            'Home', 'End', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'
-        ];
-        
-        if (allowedKeys.includes(e.key)) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                // Focus first payment method radio button
-                document.getElementById('lipa').focus();
-            }
-            return;
-        }
-        
-        // Allow Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
-        if (e.ctrlKey && ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) {
-            return;
-        }
-        
-        // Allow numbers and decimal point
-        if (!/[\d.]/.test(e.key)) {
-            e.preventDefault();
-        }
-    });
-    
-    // Payment method selection
-    document.querySelectorAll('input[name="payment_method"]').forEach(radio => {
-        radio.addEventListener('change', function() {
-            updateSubmitButton();
-            
-            // Visual feedback for selection
-            document.querySelectorAll('.payment-option').forEach(option => {
-                option.classList.remove('selected');
-            });
-            this.closest('.payment-option').classList.add('selected');
-        });
-        
-        radio.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter' && !submitBtn.disabled) {
-                e.preventDefault();
-                salesForm.dispatchEvent(new Event('submit', { cancelable: true }));
-            }
-        });
-    });
-    
-    unitPriceInput.addEventListener('paste', function(e) {
-        setTimeout(() => {
-            addCommasToInput(this);
-            calculateTotal();
-            updateSubmitButton();
-        }, 10);
-    });
-    
-    // Reset button
-    resetBtn.addEventListener('click', function(e) {
-        e.preventDefault();
-        resetForm();
-        showNotification('Form reset successfully', 'info');
-    });
-    
-    // Form submission
-    salesForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        if (!validateForm()) {
-            return;
-        }
-        
-        if (!confirmSale()) {
-            return;
-        }
-        
-        // Show loading state
-        const originalText = submitBtn.innerHTML;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-        submitBtn.disabled = true;
-        
-        // Clean unit price value for submission
-        const cleanPrice = parsePrice(unitPriceInput.value);
-        
-        // Create form data
-        const formData = new FormData(this);
-        formData.set('unit_price', cleanPrice.toString());
-        
-        // Submit form
-        fetch(this.action || window.location.href, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.text())
-        .then(html => {
-            document.documentElement.innerHTML = html;
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            submitBtn.innerHTML = originalText;
-            submitBtn.disabled = false;
-            showNotification('Error processing sale. Please try again.', 'error');
-        });
-    });
-    
-    // Keyboard shortcuts
-    document.addEventListener('keydown', function(e) {
-        if (e.ctrlKey && e.key === 'r') {
-            e.preventDefault();
-            resetForm();
-            showNotification('Form reset with Ctrl+R', 'info');
-        }
-        
-        if (e.key === 'F2') {
-            e.preventDefault();
-            document.getElementById('product-search').focus();
-        }
-        
-        if (e.key === 'F3') {
-            e.preventDefault();
-            quantityInput.focus();
-        }
-        
-        if (e.key === 'F4') {
-            e.preventDefault();
-            unitPriceInput.focus();
-        }
-        
-        if (e.key === 'F5') {
-            e.preventDefault();
-            document.getElementById('lipa').focus();
-        }
-    });
-    
+
     // Initialize
     updateSubmitButton();
-    
-    // Auto-focus on page load
-    setTimeout(() => {
-        document.getElementById('product-search').focus();
-    }, 500);
-    
-    // Add notification styles
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateX(100%);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-        
-        @keyframes slideOut {
-            from {
-                opacity: 1;
-                transform: translateX(0);
-            }
-            to {
-                opacity: 0;
-                transform: translateX(100%);
-            }
-        }
-        
-        .alert {
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            border-left: 4px solid;
-        }
-        
-        .alert-success {
-            background: rgba(46, 204, 113, 0.1);
-            border-color: #2ecc71;
-            color: #27ae60;
-        }
-        
-        .alert-error {
-            background: rgba(231, 76, 60, 0.1);
-            border-color: #e74c3c;
-            color: #c0392b;
-        }
-        
-        .alert-warning {
-            background: rgba(243, 156, 18, 0.1);
-            border-color: #f39c12;
-            color: #e67e22;
-        }
-        
-        .alert-info {
-            background: rgba(52, 152, 219, 0.1);
-            border-color: #3498db;
-            color: #2980b9;
-        }
-    `;
-    document.head.appendChild(style);
-    
-    console.log('Enhanced Make Sale system initialized successfully');
+    productSearch.focus();
 });
 </script>
 

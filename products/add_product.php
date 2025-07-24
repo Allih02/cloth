@@ -25,12 +25,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($stock_quantity < 0) $errors[] = "Stock quantity cannot be negative";
     if ($supplier_id <= 0) $errors[] = "Please select a supplier";
     
+    // Handle image upload
+    $image_path = null;
+    if (isset($_FILES['product_image']) && $_FILES['product_image']['error'] === UPLOAD_ERR_OK) {
+        $upload_dir = '../uploads/products/';
+        
+        // Create upload directory if it doesn't exist
+        if (!file_exists($upload_dir)) {
+            mkdir($upload_dir, 0755, true);
+        }
+        
+        $file_tmp = $_FILES['product_image']['tmp_name'];
+        $file_name = $_FILES['product_image']['name'];
+        $file_size = $_FILES['product_image']['size'];
+        $file_type = $_FILES['product_image']['type'];
+        
+        // Validate file type
+        $allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        if (!in_array($file_type, $allowed_types)) {
+            $errors[] = "Invalid file type. Please upload JPG, PNG, GIF, or WebP images only.";
+        }
+        
+        // Validate file size (5MB max)
+        if ($file_size > 5 * 1024 * 1024) {
+            $errors[] = "File size too large. Maximum size is 5MB.";
+        }
+        
+        if (empty($errors)) {
+            // Generate unique filename
+            $file_extension = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
+            $unique_filename = uniqid('product_') . '_' . time() . '.' . $file_extension;
+            $target_path = $upload_dir . $unique_filename;
+            
+            if (move_uploaded_file($file_tmp, $target_path)) {
+                $image_path = 'uploads/products/' . $unique_filename;
+                
+                // Optional: Create thumbnail for better performance
+                createThumbnail($target_path, $upload_dir . 'thumb_' . $unique_filename, 200, 200);
+            } else {
+                $errors[] = "Failed to upload image. Please try again.";
+            }
+        }
+    }
+    
     if (empty($errors)) {
         $stmt = $conn->prepare("
-            INSERT INTO products (name, category_id, size, color, brand, price, stock_quantity, supplier_id) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO products (name, category_id, size, color, brand, price, stock_quantity, supplier_id, image_path) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
-        $stmt->bind_param("sisssdii", $name, $category_id, $size, $color, $brand, $price, $stock_quantity, $supplier_id);
+        $stmt->bind_param("sisssdiss", $name, $category_id, $size, $color, $brand, $price, $stock_quantity, $supplier_id, $image_path);
         
         if ($stmt->execute()) {
             header("Location: view_products.php?success=added");
@@ -41,6 +84,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         $stmt->close();
     }
+}
+
+// Function to create thumbnail
+function createThumbnail($source, $destination, $width, $height) {
+    $info = getimagesize($source);
+    if (!$info) return false;
+    
+    $mime = $info['mime'];
+    
+    switch ($mime) {
+        case 'image/jpeg':
+            $image = imagecreatefromjpeg($source);
+            break;
+        case 'image/png':
+            $image = imagecreatefrompng($source);
+            break;
+        case 'image/gif':
+            $image = imagecreatefromgif($source);
+            break;
+        case 'image/webp':
+            $image = imagecreatefromwebp($source);
+            break;
+        default:
+            return false;
+    }
+    
+    $original_width = imagesx($image);
+    $original_height = imagesy($image);
+    
+    // Calculate new dimensions maintaining aspect ratio
+    $ratio = min($width / $original_width, $height / $original_height);
+    $new_width = $original_width * $ratio;
+    $new_height = $original_height * $ratio;
+    
+    $thumbnail = imagecreatetruecolor($new_width, $new_height);
+    
+    // Preserve transparency for PNG and GIF
+    if ($mime == 'image/png' || $mime == 'image/gif') {
+        imagealphablending($thumbnail, false);
+        imagesavealpha($thumbnail, true);
+        $transparent = imagecolorallocatealpha($thumbnail, 255, 255, 255, 127);
+        imagefill($thumbnail, 0, 0, $transparent);
+    }
+    
+    imagecopyresampled($thumbnail, $image, 0, 0, 0, 0, $new_width, $new_height, $original_width, $original_height);
+    
+    // Save thumbnail
+    switch ($mime) {
+        case 'image/jpeg':
+            imagejpeg($thumbnail, $destination, 85);
+            break;
+        case 'image/png':
+            imagepng($thumbnail, $destination);
+            break;
+        case 'image/gif':
+            imagegif($thumbnail, $destination);
+            break;
+        case 'image/webp':
+            imagewebp($thumbnail, $destination, 85);
+            break;
+    }
+    
+    imagedestroy($image);
+    imagedestroy($thumbnail);
+    
+    return true;
 }
 
 // Get categories for dropdown
@@ -72,7 +181,7 @@ $suppliers = $conn->query("SELECT * FROM suppliers ORDER BY name");
             </div>
         <?php endif; ?>
         
-        <form method="POST" action="" id="productForm">
+        <form method="POST" action="" id="productForm" enctype="multipart/form-data">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
                 <div>
                     <div class="form-group">
@@ -111,6 +220,24 @@ $suppliers = $conn->query("SELECT * FROM suppliers ORDER BY name");
                             <input type="color" id="colorPicker" style="width: 50px; height: 40px; border: none; border-radius: 5px;">
                         </div>
                     </div>
+                    
+                    <div class="form-group">
+                        <label for="product_image"><i class="fas fa-image"></i> Product Image</label>
+                        <div class="image-upload-container">
+                            <input type="file" id="product_image" name="product_image" class="form-control" 
+                                   accept="image/*" onchange="previewImage(this)">
+                            <div class="upload-help">
+                                <i class="fas fa-info-circle"></i>
+                                Supported formats: JPG, PNG, GIF, WebP (Max: 5MB)
+                            </div>
+                            <div id="imagePreview" class="image-preview" style="display: none;">
+                                <img id="previewImg" src="" alt="Preview">
+                                <button type="button" class="remove-image" onclick="removeImage()">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 <div>
@@ -146,6 +273,18 @@ $suppliers = $conn->query("SELECT * FROM suppliers ORDER BY name");
                                 </option>
                             <?php endwhile; ?>
                         </select>
+                    </div>
+                    
+                    <!-- Image Upload Guidelines -->
+                    <div class="upload-guidelines">
+                        <h4><i class="fas fa-camera"></i> Image Guidelines</h4>
+                        <ul>
+                            <li>Use high-quality images for best results</li>
+                            <li>Square images (1:1 ratio) work best</li>
+                            <li>Minimum resolution: 300x300 pixels</li>
+                            <li>Clear product visibility preferred</li>
+                            <li>Good lighting and contrast</li>
+                        </ul>
                     </div>
                 </div>
             </div>
@@ -262,6 +401,44 @@ document.addEventListener('DOMContentLoaded', function() {
         return colors[colorName.toLowerCase()];
     }
 });
+
+// Image preview functionality
+function previewImage(input) {
+    const file = input.files[0];
+    const preview = document.getElementById('imagePreview');
+    const previewImg = document.getElementById('previewImg');
+    
+    if (file) {
+        // Validate file size (5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            showNotification('File size too large. Maximum size is 5MB.', 'danger');
+            input.value = '';
+            return;
+        }
+        
+        // Validate file type
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        if (!allowedTypes.includes(file.type)) {
+            showNotification('Invalid file type. Please upload JPG, PNG, GIF, or WebP images only.', 'danger');
+            input.value = '';
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            previewImg.src = e.target.result;
+            preview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    } else {
+        preview.style.display = 'none';
+    }
+}
+
+function removeImage() {
+    document.getElementById('product_image').value = '';
+    document.getElementById('imagePreview').style.display = 'none';
+}
 </script>
 
 <style>
@@ -271,8 +448,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 }
 
-.form-group input:focus,
-.form-group select:focus {
+.form-control:focus {
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(102, 126, 234, 0.2);
 }
@@ -284,6 +460,112 @@ document.addEventListener('DOMContentLoaded', function() {
 
 #colorPicker:hover {
     transform: scale(1.1);
+}
+
+.image-upload-container {
+    position: relative;
+}
+
+.upload-help {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.upload-help i {
+    color: #3498db;
+}
+
+.image-preview {
+    margin-top: 1rem;
+    position: relative;
+    display: inline-block;
+    border: 2px solid #e1e8ed;
+    border-radius: 8px;
+    padding: 0.5rem;
+    background: #f8f9fa;
+}
+
+.image-preview img {
+    max-width: 200px;
+    max-height: 200px;
+    object-fit: cover;
+    border-radius: 4px;
+    display: block;
+}
+
+.remove-image {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    transition: all 0.2s ease;
+}
+
+.remove-image:hover {
+    background: #c0392b;
+    transform: scale(1.1);
+}
+
+.upload-guidelines {
+    background: rgba(52, 152, 219, 0.1);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.upload-guidelines h4 {
+    color: #3498db;
+    margin-bottom: 0.75rem;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.upload-guidelines ul {
+    margin: 0;
+    padding-left: 1.5rem;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.upload-guidelines li {
+    margin-bottom: 0.25rem;
+}
+
+/* File input styling */
+input[type="file"] {
+    padding: 0.5rem;
+    border: 2px dashed #e1e8ed;
+    border-radius: 8px;
+    background: #f8f9fa;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+input[type="file"]:hover {
+    border-color: #667eea;
+    background: rgba(102, 126, 234, 0.05);
+}
+
+input[type="file"]:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 </style>
 

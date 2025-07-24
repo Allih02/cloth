@@ -57,6 +57,7 @@ requireLogin();
                 <thead>
                     <tr>
                         <th>ID</th>
+                        <th>Image</th>
                         <th>Name</th>
                         <th>Category</th>
                         <th>Size</th>
@@ -93,17 +94,37 @@ requireLogin();
                     <tr data-category="<?php echo htmlspecialchars($row['category_name']); ?>" 
                         data-stock="<?php echo $row['stock_quantity']; ?>">
                         <td><?php echo $row['product_id']; ?></td>
-                        <td><?php echo htmlspecialchars($row['name']); ?></td>
+                        <td class="product-image-cell">
+                            <?php if (!empty($row['image_path']) && file_exists($row['image_path'])): ?>
+                                <div class="product-image-container">
+                                    <img src="<?php echo htmlspecialchars($row['image_path']); ?>" 
+                                         alt="<?php echo htmlspecialchars($row['name']); ?>"
+                                         class="product-image"
+                                         onclick="openImageModal('<?php echo htmlspecialchars($row['image_path']); ?>', '<?php echo htmlspecialchars($row['name']); ?>')">
+                                    <div class="image-overlay">
+                                        <i class="fas fa-expand-alt"></i>
+                                    </div>
+                                </div>
+                            <?php else: ?>
+                                <div class="product-image-placeholder">
+                                    <i class="fas fa-image"></i>
+                                    <span>No Image</span>
+                                </div>
+                            <?php endif; ?>
+                        </td>
+                        <td><strong><?php echo htmlspecialchars($row['name']); ?></strong></td>
                         <td><?php echo htmlspecialchars($row['category_name']); ?></td>
                         <td><?php echo htmlspecialchars($row['size']); ?></td>
                         <td>
-                            <span style="display: inline-block; width: 20px; height: 20px; background-color: <?php echo strtolower($row['color']); ?>; border: 1px solid #ddd; border-radius: 3px; margin-right: 5px; vertical-align: middle;"></span>
-                            <?php echo htmlspecialchars($row['color']); ?>
+                            <div class="color-display">
+                                <span style="display: inline-block; width: 20px; height: 20px; background-color: <?php echo strtolower($row['color']); ?>; border: 1px solid #ddd; border-radius: 3px; margin-right: 5px; vertical-align: middle;"></span>
+                                <?php echo htmlspecialchars($row['color']); ?>
+                            </div>
                         </td>
                         <td><?php echo htmlspecialchars($row['brand']); ?></td>
-                        <td>$<?php echo number_format($row['price'], 2); ?></td>
+                        <td><strong>$<?php echo number_format($row['price'], 2); ?></strong></td>
                         <td class="<?php echo $stockClass; ?>">
-                            <strong><?php echo $row['stock_quantity']; ?></strong>
+                            <strong><?php echo number_format($row['stock_quantity']); ?></strong>
                             <?php if ($row['stock_quantity'] == 0): ?>
                                 <i class="fas fa-exclamation-triangle" title="Out of stock"></i>
                             <?php elseif ($row['stock_quantity'] < 10): ?>
@@ -128,6 +149,15 @@ requireLogin();
                 </tbody>
             </table>
         </div>
+    </div>
+</div>
+
+<!-- Image Modal -->
+<div id="imageModal" class="image-modal" style="display: none;">
+    <div class="image-modal-content">
+        <span class="image-modal-close" onclick="closeImageModal()">&times;</span>
+        <img id="modalImage" src="" alt="">
+        <div id="modalCaption" class="image-modal-caption"></div>
     </div>
 </div>
 
@@ -195,6 +225,276 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize table info
     updateTableInfo(tableRows.length, tableRows.length);
 });
+
+// Image modal functions
+function openImageModal(imageSrc, productName) {
+    const modal = document.getElementById('imageModal');
+    const modalImg = document.getElementById('modalImage');
+    const caption = document.getElementById('modalCaption');
+    
+    modal.style.display = 'block';
+    modalImg.src = imageSrc;
+    caption.textContent = productName;
+    
+    // Add keyboard event listener
+    document.addEventListener('keydown', handleModalKeydown);
+}
+
+function closeImageModal() {
+    const modal = document.getElementById('imageModal');
+    modal.style.display = 'none';
+    
+    // Remove keyboard event listener
+    document.removeEventListener('keydown', handleModalKeydown);
+}
+
+function handleModalKeydown(event) {
+    if (event.key === 'Escape') {
+        closeImageModal();
+    }
+}
+
+// Close modal when clicking outside the image
+document.getElementById('imageModal').addEventListener('click', function(event) {
+    if (event.target === this) {
+        closeImageModal();
+    }
+});
 </script>
+
+<style>
+/* Product Image Styles */
+.product-image-cell {
+    width: 80px;
+    padding: 0.5rem !important;
+}
+
+.product-image-container {
+    position: relative;
+    width: 60px;
+    height: 60px;
+    overflow: hidden;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: 2px solid #e1e8ed;
+}
+
+.product-image-container:hover {
+    transform: scale(1.05);
+    border-color: #667eea;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
+}
+
+.product-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: all 0.3s ease;
+}
+
+.product-image-container:hover .product-image {
+    transform: scale(1.1);
+}
+
+.image-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    color: white;
+    font-size: 0.8rem;
+}
+
+.product-image-container:hover .image-overlay {
+    opacity: 1;
+}
+
+.product-image-placeholder {
+    width: 60px;
+    height: 60px;
+    background: #f8f9fa;
+    border: 2px dashed #e1e8ed;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    font-size: 0.7rem;
+    text-align: center;
+}
+
+.product-image-placeholder i {
+    font-size: 1.2rem;
+    margin-bottom: 0.25rem;
+    opacity: 0.5;
+}
+
+.product-image-placeholder span {
+    font-size: 0.6rem;
+    line-height: 1;
+}
+
+/* Image Modal Styles */
+.image-modal {
+    position: fixed;
+    z-index: 10000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.9);
+    animation: fadeIn 0.3s ease;
+}
+
+.image-modal-content {
+    margin: auto;
+    display: block;
+    width: 80%;
+    max-width: 800px;
+    position: relative;
+    top: 50%;
+    transform: translateY(-50%);
+    animation: zoomIn 0.3s ease;
+}
+
+.image-modal-content img {
+    width: 100%;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+}
+
+.image-modal-close {
+    position: absolute;
+    top: -40px;
+    right: 0;
+    color: #fff;
+    font-size: 2rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: rgba(0, 0, 0, 0.5);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.image-modal-close:hover,
+.image-modal-close:focus {
+    color: #ff6b6b;
+    transform: scale(1.1);
+    background: rgba(0, 0, 0, 0.7);
+}
+
+.image-modal-caption {
+    margin: auto;
+    display: block;
+    width: 80%;
+    max-width: 800px;
+    text-align: center;
+    color: #ccc;
+    padding: 10px 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+/* Color Display Enhancement */
+.color-display {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.color-display span {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes zoomIn {
+    from { 
+        opacity: 0;
+        transform: translateY(-50%) scale(0.7);
+    }
+    to { 
+        opacity: 1;
+        transform: translateY(-50%) scale(1);
+    }
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .product-image-container {
+        width: 50px;
+        height: 50px;
+    }
+    
+    .product-image-placeholder {
+        width: 50px;
+        height: 50px;
+        font-size: 0.6rem;
+    }
+    
+    .product-image-placeholder i {
+        font-size: 1rem;
+    }
+    
+    .image-modal-content {
+        width: 95%;
+        margin: 5% auto;
+        transform: none;
+        top: auto;
+    }
+    
+    .image-modal-close {
+        top: 10px;
+        right: 10px;
+        font-size: 1.5rem;
+        width: 35px;
+        height: 35px;
+    }
+    
+    .image-modal-caption {
+        width: 95%;
+        font-size: 1rem;
+    }
+}
+
+/* Table adjustments */
+.table th:nth-child(2),
+.table td:nth-child(2) {
+    text-align: center;
+    vertical-align: middle;
+}
+
+/* Enhanced hover effects for table rows */
+.table tbody tr:hover {
+    background-color: rgba(102, 126, 234, 0.05);
+    transform: scale(1.01);
+    transition: all 0.2s ease;
+}
+
+.table tbody tr:hover .product-image-container {
+    border-color: #667eea;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+</style>
 
 <?php include '../includes/footer.php'; ?>
