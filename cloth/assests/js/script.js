@@ -61,3 +61,17 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 });
+
+// Responsive helpers: ensure any .table without a wrapper becomes scrollable on small screens
+document.addEventListener('DOMContentLoaded', function() {
+  const tables = document.querySelectorAll('table.table');
+  tables.forEach(function(tbl) {
+    // If not already inside a .table-responsive, wrap it
+    if (!tbl.parentElement || !tbl.parentElement.classList.contains('table-responsive')) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'table-responsive';
+      tbl.parentNode.insertBefore(wrapper, tbl);
+      wrapper.appendChild(tbl);
+    }
+  });
+});

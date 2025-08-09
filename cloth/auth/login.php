@@ -1,127 +1,115 @@
 <?php
-// Configuration for logo
-$logo_config = [
-    'enable_logo' => true,
-    'logo_url' => '../assets/images/logo.jpg', // Change this to your logo path
-    'logo_alt' => 'Super Sub Jersey Store',
-    'logo_width' => '100px',  // Set your preferred width
-    'logo_height' => 'auto',  // Set your preferred height
-    'fallback_to_icon' => true, // Show icon if logo not found
-    'show_company_name' => true, // Show company name below logo
-];
-
-// Don't start session here - let config.php handle it
+// Fixed login.php - Replace your existing auth/login.php with this version
 require_once '../includes/config.php';
+require_once '../includes/auth.php';
+
+// Enable error reporting for debugging
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
 // Redirect if already logged in
-if (isset($_SESSION['user_id'])) {
-    header('Location: ../index.php');
+if (isLoggedIn()) {
+    header("Location: ../index.php");
     exit();
 }
 
 $error = '';
-$success = '';
+$debug_info = '';
 
-// Handle login form submission
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username']);
-    $password = $_POST['password'];
+    $password = trim($_POST['password']);
+    
+    // Debug: Show what we received
+    $debug_info .= "Received username: '" . htmlspecialchars($username) . "'<br>";
+    $debug_info .= "Password length: " . strlen($password) . "<br>";
     
     if (empty($username) || empty($password)) {
-        $error = 'Please enter both username and password.';
+        $error = "Please fill in all fields.";
     } else {
         try {
-            // Check what columns exist in the users table
-            $columns_check = $conn->query("DESCRIBE users");
-            $columns = [];
-            while ($row = $columns_check->fetch_assoc()) {
-                $columns[] = $row['Field'];
+            // Prepare statement to find user
+            $stmt = $conn->prepare("SELECT * FROM users WHERE username = ?");
+            if (!$stmt) {
+                throw new Exception("Database prepare failed: " . $conn->error);
             }
             
-            // Determine which password column to use
-            $password_column = in_array('password_hash', $columns) ? 'password_hash' : 'password';
-            
-            // Check user credentials
-            $stmt = $conn->prepare("SELECT user_id, username, $password_column as password_field, role, email FROM users WHERE username = ? OR email = ?");
-            $stmt->bind_param("ss", $username, $username);
+            $stmt->bind_param("s", $username);
             $stmt->execute();
             $result = $stmt->get_result();
             
-            if ($user = $result->fetch_assoc()) {
-                // Verify password (both hashed and plain text)
-                $password_valid = password_verify($password, $user['password_field']) || $password === $user['password_field'];
+            $debug_info .= "Query executed, found " . $result->num_rows . " user(s)<br>";
+            
+            if ($result->num_rows === 1) {
+                $user = $result->fetch_assoc();
+                $debug_info .= "User found: " . htmlspecialchars($user['username']) . " (ID: " . $user['user_id'] . ")<br>";
+                $debug_info .= "Stored password hash: " . substr($user['password'], 0, 20) . "...<br>";
                 
-                if ($password_valid) {
+                // Verify password
+                if (password_verify($password, $user['password'])) {
+                    $debug_info .= "Password verification: SUCCESS<br>";
+                    
+                    // Regenerate session ID for security
+                    session_regenerate_id(true);
+                    
                     // Set session variables
                     $_SESSION['user_id'] = $user['user_id'];
                     $_SESSION['username'] = $user['username'];
                     $_SESSION['role'] = $user['role'];
-                    $_SESSION['email'] = $user['email'];
                     
-                    // Update last login if column exists
-                    if (in_array('last_login', $columns)) {
-                        $update_stmt = $conn->prepare("UPDATE users SET last_login = NOW() WHERE user_id = ?");
-                        $update_stmt->bind_param("i", $user['user_id']);
-                        $update_stmt->execute();
-                    }
+                    $debug_info .= "Session variables set<br>";
                     
-                    // Redirect to dashboard
-                    header('Location: ../index.php');
+                    // Success! Redirect to dashboard
+                    header("Location: ../index.php");
                     exit();
                 } else {
-                    $error = 'Invalid username or password.';
+                    $debug_info .= "Password verification: FAILED<br>";
+                    
+                    // Test if password might be plain text (for debugging)
+                    if ($password === $user['password']) {
+                        $debug_info .= "Password appears to be stored as plain text!<br>";
+                        $error = "Password stored incorrectly. Please reset your password.";
+                    } else {
+                        $error = "Invalid username or password.";
+                    }
                 }
             } else {
-                $error = 'Invalid username or password.';
+                $debug_info .= "No user found with username: " . htmlspecialchars($username) . "<br>";
+                $error = "Invalid username or password.";
             }
+            
             $stmt->close();
+            
         } catch (Exception $e) {
-            $error = 'Database error. Please try again.';
+            $error = "Database error: " . $e->getMessage();
+            $debug_info .= "Exception: " . $e->getMessage() . "<br>";
         }
     }
 }
 
-// Create default admin user if no users exist
-try {
-    $check_users = $conn->query("SELECT COUNT(*) as count FROM users");
-    if ($check_users) {
-        $user_count = $check_users->fetch_assoc()['count'];
-
-        if ($user_count == 0) {
+// Check if we need to create default admin user
+if (!$error && $_SERVER['REQUEST_METHOD'] !== 'POST') {
+    try {
+        $check_admin = $conn->query("SELECT COUNT(*) FROM users WHERE username = 'admin'");
+        if ($check_admin && $check_admin->fetch_row()[0] == 0) {
+            // Create default admin user
             $admin_username = 'admin';
-            $admin_password = 'admin123';
+            $admin_password = password_hash('admin123', PASSWORD_DEFAULT);
             $admin_role = 'admin';
-            $admin_email = 'admin@supersub.com';
+            $admin_email = 'admin@clothingshop.com';
             
-            // Check password column
-            $columns_check = $conn->query("DESCRIBE users");
-            $columns = [];
-            while ($row = $columns_check->fetch_assoc()) {
-                $columns[] = $row['Field'];
-            }
-            
-            if (in_array('password_hash', $columns)) {
-                $password_to_store = password_hash($admin_password, PASSWORD_DEFAULT);
-                $stmt = $conn->prepare("INSERT INTO users (username, password_hash, role, email) VALUES (?, ?, ?, ?)");
-            } else {
-                $password_to_store = $admin_password;
-                $stmt = $conn->prepare("INSERT INTO users (username, password, role, email) VALUES (?, ?, ?, ?)");
-            }
-            
-            $stmt->bind_param("ssss", $admin_username, $password_to_store, $admin_role, $admin_email);
+            $stmt = $conn->prepare("INSERT INTO users (username, password, role, email) VALUES (?, ?, ?, ?)");
+            $stmt->bind_param("ssss", $admin_username, $admin_password, $admin_role, $admin_email);
             
             if ($stmt->execute()) {
-                $success = 'Default admin account created! Username: admin, Password: admin123';
+                $debug_info .= "Default admin user created successfully!<br>";
             }
             $stmt->close();
         }
+    } catch (Exception $e) {
+        // Silently handle this error
     }
-} catch (Exception $e) {
-    // Silently handle this error
 }
-
-// Check if logo exists
-$logo_exists = $logo_config['enable_logo'] && file_exists($logo_config['logo_url']);
 ?>
 
 <!DOCTYPE html>
@@ -130,830 +118,424 @@ $logo_exists = $logo_config['enable_logo'] && file_exists($logo_config['logo_url
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Super Sub Jersey Store</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="../assests/css/style.css">
     <style>
-        :root {
-            --primary-color: #667eea;
-            --primary-dark: #5a67d8;
-            --secondary-color: #764ba2;
-            --success-color: #10b981;
-            --danger-color: #ef4444;
-            --text-primary: #1a202c;
-            --text-secondary: #64748b;
-            --text-light: #ffffff;
-            --bg-light: #f8fafc;
-            --bg-white: #ffffff;
-            --border-color: #e2e8f0;
-            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-            --border-radius: 12px;
-            --border-radius-lg: 20px;
-            --transition-normal: 0.3s ease;
-            --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
 
-        html, body {
-            height: 100%;
-            width: 100%;
-            overflow-x: hidden;
-        }
-
         body {
-            font-family: var(--font-family);
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 1rem;
-            position: relative;
-        }
-
-        /* Animated background pattern */
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="20" cy="20" r="0.5" fill="white" opacity="0.1"/><circle cx="80" cy="40" r="0.3" fill="white" opacity="0.1"/><circle cx="40" cy="80" r="0.4" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
-            opacity: 0.3;
-            animation: float 20s ease-in-out infinite;
-            z-index: -1;
-        }
-
-        @keyframes float {
-            0%, 100% { transform: translateY(0px) rotate(0deg); }
-            50% { transform: translateY(-20px) rotate(1deg); }
+            padding: var(--space-lg);
         }
 
         .login-container {
-            background: rgba(255, 255, 255, 0.98);
-            backdrop-filter: blur(20px);
-            border-radius: var(--border-radius-lg);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: var(--radius-xl);
             box-shadow: var(--shadow-xl);
             overflow: hidden;
             width: 100%;
-            max-width: 420px;
-            position: relative;
-            animation: slideInUp 0.8s ease-out;
+            max-width: 400px;
+            animation: fadeInUp 0.6s ease-out;
         }
 
-        @keyframes slideInUp {
+        @keyframes fadeInUp {
             from {
                 opacity: 0;
-                transform: translateY(40px) scale(0.95);
+                transform: translateY(30px);
             }
             to {
                 opacity: 1;
-                transform: translateY(0) scale(1);
+                transform: translateY(0);
             }
         }
 
         .login-header {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-            color: var(--text-light);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
             text-align: center;
-            padding: 2.5rem 1.5rem;
-            position: relative;
-            overflow: hidden;
+            padding: 2rem;
         }
 
-        .login-header::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.1) 0%, transparent 50%),
-                        radial-gradient(circle at 70% 80%, rgba(255,255,255,0.1) 0%, transparent 50%);
-            animation: shimmer 3s ease-in-out infinite;
-        }
-
-        @keyframes shimmer {
-            0%, 100% { opacity: 0.5; }
-            50% { opacity: 1; }
-        }
-
-        /* Logo Styles */
-        .logo-container {
-            margin-bottom: 1.5rem;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-            z-index: 2;
-        }
-
-        .company-logo {
-            max-width: <?php echo $logo_config['logo_width']; ?>;
-            height: <?php echo $logo_config['logo_height']; ?>;
-            border-radius: 16px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-            background: rgba(255, 255, 255, 0.1);
-            padding: 0.75rem;
-            transition: all 0.4s ease;
-            backdrop-filter: blur(10px);
-        }
-
-        .company-logo:hover {
-            transform: scale(1.05) rotate(2deg);
-            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
-        }
-
-        .logo-placeholder {
-            width: 100px;
-            height: 100px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 2.5rem;
-            color: var(--text-light);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-            transition: all 0.4s ease;
-            backdrop-filter: blur(10px);
-        }
-
-        .logo-placeholder:hover {
-            transform: scale(1.05) rotate(-2deg);
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        .company-info {
-            position: relative;
-            z-index: 2;
-        }
-
-        .company-name {
-            font-size: 2.2rem;
-            font-weight: 700;
+        .login-header h2 {
+            font-size: 1.8rem;
             margin-bottom: 0.5rem;
-            background: linear-gradient(45deg, #fff, #f0f0f0);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
         }
 
-        .company-tagline {
-            font-size: 1rem;
+        .login-header p {
             opacity: 0.9;
-            font-weight: 300;
-            letter-spacing: 0.5px;
+            font-size: 0.9rem;
         }
 
-        /* Enhanced Form Styles */
         .login-body {
-            padding: 2.5rem 2rem;
-            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            padding: 2rem;
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            border-left: 4px solid;
+        }
+
+        .alert-danger {
+            background: rgba(231, 76, 60, 0.1);
+            border-color: #e74c3c;
+            color: #c0392b;
+        }
+
+        .alert-info {
+            background: rgba(52, 152, 219, 0.1);
+            border-color: #3498db;
+            color: #2980b9;
+            font-size: 0.85rem;
         }
 
         .form-group {
-            margin-bottom: 1.75rem;
-            position: relative;
+            margin-bottom: 1.5rem;
         }
 
-        .form-label {
+        .form-group label {
             display: block;
-            margin-bottom: 0.75rem;
+            margin-bottom: 0.5rem;
             font-weight: 600;
-            color: var(--text-primary);
-            font-size: 0.875rem;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            color: #2c3e50;
         }
 
         .form-control {
             width: 100%;
-            padding: 1rem 1.25rem;
-            padding-left: 3.5rem;
-            border: 2px solid var(--border-color);
-            border-radius: var(--border-radius);
+            padding: 0.75rem;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
             font-size: 1rem;
-            transition: all var(--transition-normal);
-            background: var(--bg-white);
-            color: var(--text-primary);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.9);
         }
 
         .form-control:focus {
             outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1), 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
             transform: translateY(-2px);
-        }
-
-        .input-icon {
-            position: absolute;
-            left: 1.25rem;
-            top: 3.5rem;
-            color: var(--text-secondary);
-            font-size: 1.1rem;
-            transition: all var(--transition-normal);
-        }
-
-        .form-control:focus + .input-icon {
-            color: var(--primary-color);
-            transform: scale(1.1);
         }
 
         .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.75rem;
             width: 100%;
-            padding: 1rem 2rem;
+            padding: 0.75rem;
             border: none;
-            border-radius: var(--border-radius);
-            font-size: 1.1rem;
+            border-radius: 8px;
+            font-size: 1rem;
             font-weight: 600;
-            text-decoration: none;
             cursor: pointer;
-            transition: all var(--transition-normal);
-            position: relative;
-            overflow: hidden;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .btn::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-            transition: left 0.6s;
-        }
-
-        .btn:hover::before {
-            left: 100%;
+            transition: all 0.3s ease;
+            margin-bottom: 1rem;
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-            color: var(--text-light);
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
         }
 
         .btn-primary:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
-        }
-
-        .btn-secondary {
-            background: transparent;
-            color: var(--primary-color);
-            border: 2px solid var(--primary-color);
-        }
-
-        .btn-secondary:hover {
-            background: var(--primary-color);
-            color: var(--text-light);
             transform: translateY(-2px);
-        }
-
-        /* Enhanced Alert Styles */
-        .alert {
-            padding: 1.25rem;
-            border-radius: var(--border-radius);
-            margin-bottom: 1.75rem;
-            border: 1px solid;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            font-size: 0.9rem;
-            animation: slideInUp 0.4s ease-out;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-
-        .alert-success {
-            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(16, 185, 129, 0.05));
-            border-color: var(--success-color);
-            color: #065f46;
-        }
-
-        .alert-danger {
-            background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.05));
-            border-color: var(--danger-color);
-            color: #991b1b;
-        }
-
-        .remember-forgot {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-            flex-wrap: wrap;
-            gap: 0.75rem;
-        }
-
-        .checkbox-wrapper {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-
-        .checkbox-wrapper input[type="checkbox"] {
-            width: 1.25rem;
-            height: 1.25rem;
-            accent-color: var(--primary-color);
-            cursor: pointer;
-        }
-
-        .checkbox-wrapper label {
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-            cursor: pointer;
-            font-weight: 500;
-        }
-
-        .forgot-link {
-            color: var(--primary-color);
-            text-decoration: none;
-            font-size: 0.9rem;
-            font-weight: 600;
-            transition: all var(--transition-normal);
-        }
-
-        .forgot-link:hover {
-            color: var(--primary-dark);
-            text-decoration: underline;
-            transform: translateX(2px);
-        }
-
-        .login-footer {
-            padding: 2rem;
-            background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
-            text-align: center;
-            border-top: 1px solid var(--border-color);
-        }
-
-        .login-footer p {
-            color: var(--text-secondary);
-            font-size: 0.9rem;
-            margin-bottom: 1.25rem;
-            font-weight: 500;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         }
 
         .demo-credentials {
-            background: var(--bg-white);
-            border: 2px solid var(--border-color);
-            border-radius: var(--border-radius);
-            padding: 1.5rem;
-            margin-top: 1.25rem;
-            text-align: left;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
         }
 
         .demo-credentials h4 {
-            color: var(--text-primary);
-            font-size: 0.9rem;
-            margin-bottom: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
         }
 
         .demo-credentials p {
+            margin: 0.25rem 0;
+            font-size: 0.9rem;
+        }
+
+        .demo-credentials .note {
             font-size: 0.8rem;
-            color: var(--text-secondary);
-            margin: 0.5rem 0;
-            font-family: 'Courier New', monospace;
+            color: #666;
+            margin-top: 0.5rem;
+        }
+
+        .debug-info {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-size: 0.85rem;
+            color: #495057;
+        }
+
+        .debug-info h4 {
+            color: #6c757d;
+            margin-bottom: 0.5rem;
         }
 
         .loading {
-            pointer-events: none;
-            opacity: 0.8;
-        }
-
-        .loading::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 24px;
-            height: 24px;
-            margin: -12px 0 0 -12px;
-            border: 3px solid transparent;
-            border-top: 3px solid currentColor;
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
-            animation: spin 1s linear infinite;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            to { transform: rotate(360deg); }
         }
 
-        /* Mobile Responsive */
+        .quick-login {
+            text-align: center;
+            margin-top: 1rem;
+        }
+
+        .quick-login button {
+            background: rgba(46, 204, 113, 0.2);
+            border: 1px solid #2ecc71;
+            color: #27ae60;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.3s ease;
+        }
+
+        .quick-login button:hover {
+            background: #2ecc71;
+            color: white;
+        }
+
+        /* Enhanced Mobile Responsive Design */
         @media (max-width: 768px) {
             body {
-                padding: 0.75rem;
+                padding: var(--space-md);
+                align-items: stretch;
             }
 
             .login-container {
-                max-width: 100%;
+                max-width: none;
+                border-radius: var(--radius-lg);
+                margin: auto 0;
             }
 
             .login-header {
-                padding: 2rem 1.25rem;
+                padding: var(--space-xl);
             }
 
-            .company-name {
-                font-size: 1.8rem;
-            }
-
-            .company-logo {
-                max-width: 80px;
-            }
-
-            .logo-placeholder {
-                width: 80px;
-                height: 80px;
-                font-size: 2rem;
+            .login-header h2 {
+                font-size: var(--text-xl);
             }
 
             .login-body {
-                padding: 2rem 1.5rem;
+                padding: var(--space-xl);
             }
 
             .form-control {
-                padding: 0.875rem 1rem;
-                padding-left: 3rem;
-                font-size: 0.95rem;
-            }
-
-            .input-icon {
-                left: 1rem;
-                top: 3.25rem;
-                font-size: 1rem;
+                padding: var(--space-lg);
+                font-size: var(--text-base);
             }
 
             .btn {
-                padding: 0.875rem 1.5rem;
-                font-size: 1rem;
+                padding: var(--space-lg);
+                font-size: var(--text-base);
             }
 
-            .remember-forgot {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 1rem;
+            .demo-credentials {
+                padding: var(--space-lg);
+            }
+
+            .demo-credentials h4 {
+                font-size: var(--text-sm);
+            }
+
+            .demo-credentials p {
+                font-size: var(--text-xs);
             }
         }
 
         @media (max-width: 480px) {
-            .company-name {
-                font-size: 1.6rem;
+            body {
+                padding: var(--space-sm);
+            }
+
+            .login-container {
+                border-radius: var(--radius);
+            }
+
+            .login-header {
+                padding: var(--space-lg);
+            }
+
+            .login-header h2 {
+                font-size: var(--text-lg);
+            }
+
+            .login-header p {
+                font-size: var(--text-xs);
             }
 
             .login-body {
-                padding: 1.5rem 1rem;
+                padding: var(--space-lg);
+            }
+
+            .form-group {
+                margin-bottom: var(--space-lg);
             }
 
             .demo-credentials {
-                padding: 1rem;
+                padding: var(--space-md);
+            }
+        }
+
+        /* Landscape orientation on mobile */
+        @media (max-height: 600px) and (orientation: landscape) {
+            body {
+                align-items: flex-start;
+                padding: var(--space-sm);
+            }
+
+            .login-container {
+                margin: var(--space-sm) auto;
+            }
+
+            .login-header {
+                padding: var(--space-lg);
+            }
+
+            .login-body {
+                padding: var(--space-lg);
+            }
+
+            .demo-credentials {
+                padding: var(--space-md);
             }
         }
     </style>
 </head>
 <body>
     <div class="login-container">
-        <!-- Enhanced Login Header -->
         <div class="login-header">
-            <!-- Logo Section -->
-            <div class="logo-container">
-                <?php if ($logo_exists): ?>
-                    <img src="<?php echo $logo_config['logo_url']; ?>" 
-                         alt="<?php echo $logo_config['logo_alt']; ?>" 
-                         class="company-logo">
-                <?php elseif ($logo_config['fallback_to_icon']): ?>
-                    <div class="logo-placeholder">
-                        <i class="fas fa-tshirt"></i>
-                    </div>
-                <?php endif; ?>
-            </div>
-            
-            <!-- Company Info -->
-            <?php if ($logo_config['show_company_name']): ?>
-            <div class="company-info">
-                <h1 class="company-name">Super Sub</h1>
-                <p class="company-tagline">Jersey Store Management</p>
-            </div>
-            <?php endif; ?>
+            <h2><i class="fas fa-store"></i> Super Sub Jersey Store</h2>
+            <p>Management System Login</p>
         </div>
-
-        <!-- Login Form -->
+        
         <div class="login-body">
             <?php if ($error): ?>
                 <div class="alert alert-danger">
-                    <i class="fas fa-exclamation-circle"></i>
-                    <?php echo htmlspecialchars($error); ?>
+                    <i class="fas fa-exclamation-circle"></i> <?php echo htmlspecialchars($error); ?>
                 </div>
             <?php endif; ?>
-
-            <?php if ($success): ?>
-                <div class="alert alert-success">
-                    <i class="fas fa-check-circle"></i>
-                    <?php echo htmlspecialchars($success); ?>
-                </div>
-            <?php endif; ?>
-
-            <form method="POST" action="" id="loginForm" novalidate>
+            
+            <form method="POST" action="" id="login-form">
                 <div class="form-group">
-                    <label for="username" class="form-label">
-                        <i class="fas fa-user"></i> Username or Email
-                    </label>
-                    <input 
-                        type="text" 
-                        id="username" 
-                        name="username" 
-                        class="form-control" 
-                        placeholder="Enter your username or email"
-                        value="<?php echo isset($_POST['username']) ? htmlspecialchars($_POST['username']) : ''; ?>"
-                        required
-                        autocomplete="username"
-                    >
-                    <span class="input-icon">
-                        <i class="fas fa-user"></i>
-                    </span>
+                    <label for="username"><i class="fas fa-user"></i> Username</label>
+                    <input type="text" id="username" name="username" class="form-control" required 
+                           value="<?php echo isset($_POST['username']) ? htmlspecialchars($_POST['username']) : ''; ?>"
+                           placeholder="Enter your username">
                 </div>
-
+                
                 <div class="form-group">
-                    <label for="password" class="form-label">
-                        <i class="fas fa-lock"></i> Password
-                    </label>
-                    <input 
-                        type="password" 
-                        id="password" 
-                        name="password" 
-                        class="form-control" 
-                        placeholder="Enter your password"
-                        required
-                        autocomplete="current-password"
-                    >
-                    <span class="input-icon">
-                        <i class="fas fa-lock"></i>
-                    </span>
+                    <label for="password"><i class="fas fa-lock"></i> Password</label>
+                    <input type="password" id="password" name="password" class="form-control" required
+                           placeholder="Enter your password">
                 </div>
-
-                <div class="remember-forgot">
-                    <div class="checkbox-wrapper">
-                        <input type="checkbox" id="remember" name="remember">
-                        <label for="remember">Remember me</label>
-                    </div>
-                    <a href="#" class="forgot-link" onclick="alert('Please contact the administrator to reset your password.'); return false;">Forgot password?</a>
-                </div>
-
+                
                 <button type="submit" class="btn btn-primary" id="loginBtn">
-                    <i class="fas fa-sign-in-alt"></i>
-                    Sign In
+                    <i class="fas fa-sign-in-alt"></i> Login
                 </button>
             </form>
-        </div>
-
-        <!-- Enhanced Footer -->
-        <div class="login-footer">
-            <p>Welcome to Super Sub Jersey Store Management System</p>
             
-            <?php if (isset($user_count) && ($user_count == 0 || $success)): ?>
             <div class="demo-credentials">
-                <h4><i class="fas fa-info-circle"></i> Default Admin Account</h4>
+                <h4><i class="fas fa-key"></i> Default Login Credentials:</h4>
                 <p><strong>Username:</strong> admin</p>
                 <p><strong>Password:</strong> admin123</p>
-                <p><em>Please change these credentials after first login</em></p>
+                <p class="note">
+                    <i class="fas fa-info-circle"></i> Use these credentials to access the system
+                </p>
             </div>
-            <?php endif; ?>
             
-            <div style="margin-top: 1.5rem;">
-                <a href="../index.php" class="btn btn-secondary">
-                    <i class="fas fa-home"></i>
-                    Back to Home
-                </a>
+            <div class="quick-login">
+                <button type="button" onclick="fillDemoCredentials()">
+                    <i class="fas fa-magic"></i> Fill Demo Credentials
+                </button>
             </div>
+            
+            <?php if ($debug_info && $_SERVER['REQUEST_METHOD'] === 'POST'): ?>
+                <div class="debug-info">
+                    <h4><i class="fas fa-bug"></i> Debug Information:</h4>
+                    <?php echo $debug_info; ?>
+                </div>
+            <?php endif; ?>
         </div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const form = document.getElementById('loginForm');
+            const form = document.getElementById('login-form');
             const loginBtn = document.getElementById('loginBtn');
-            const usernameField = document.getElementById('username');
-            const passwordField = document.getElementById('password');
-
-            // Enhanced form validation
+            
             form.addEventListener('submit', function(e) {
-                let isValid = true;
+                const username = document.getElementById('username').value.trim();
+                const password = document.getElementById('password').value.trim();
                 
-                // Reset previous states
-                [usernameField, passwordField].forEach(field => {
-                    field.style.borderColor = '';
-                    field.style.transform = '';
-                });
-                
-                // Validate fields
-                if (!usernameField.value.trim()) {
-                    showFieldError(usernameField, 'Username or email is required');
-                    isValid = false;
-                }
-                
-                if (!passwordField.value.trim()) {
-                    showFieldError(passwordField, 'Password is required');
-                    isValid = false;
-                }
-                
-                if (!isValid) {
+                if (!username || !password) {
                     e.preventDefault();
-                    return false;
+                    alert('Please fill in all fields.');
+                    return;
                 }
                 
-                // Show enhanced loading state
-                loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing In...';
-                loginBtn.classList.add('loading');
+                // Show loading state
+                loginBtn.innerHTML = '<span class="loading"></span> Logging in...';
                 loginBtn.disabled = true;
             });
-
-            // Real-time validation
-            [usernameField, passwordField].forEach(field => {
-                field.addEventListener('blur', function() {
-                    if (!this.value.trim()) {
-                        showFieldError(this, this.getAttribute('placeholder'));
-                    } else {
-                        clearFieldError(this);
-                    }
-                });
-
-                field.addEventListener('input', function() {
-                    clearFieldError(this);
-                });
-
-                field.addEventListener('focus', function() {
-                    clearFieldError(this);
-                });
-            });
-
-            // Enhanced interaction effects
-            function showFieldError(field, message) {
-                field.style.borderColor = 'var(--danger-color)';
-                field.style.transform = 'shake 0.5s ease-in-out';
-                
-                // Add shake animation
-                field.animate([
-                    { transform: 'translateX(0)' },
-                    { transform: 'translateX(-10px)' },
-                    { transform: 'translateX(10px)' },
-                    { transform: 'translateX(-10px)' },
-                    { transform: 'translateX(10px)' },
-                    { transform: 'translateX(0)' }
-                ], {
-                    duration: 500,
-                    easing: 'ease-in-out'
-                });
-            }
-
-            function clearFieldError(field) {
-                field.style.borderColor = '';
-                field.style.transform = '';
-            }
-
-            // Auto-focus and smart navigation
-            if (!usernameField.value) {
-                usernameField.focus();
-            } else if (!passwordField.value) {
-                passwordField.focus();
-            }
-
-            // Enter key navigation
-            usernameField.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    passwordField.focus();
-                }
-            });
-
-            // Enhanced remember me functionality
-            const rememberCheckbox = document.getElementById('remember');
             
-            // Load saved credentials
-            try {
-                if (localStorage.getItem('rememberMe') === 'true') {
-                    const savedUsername = localStorage.getItem('savedUsername');
-                    if (savedUsername) {
-                        usernameField.value = savedUsername;
-                        rememberCheckbox.checked = true;
-                        passwordField.focus();
-                    }
-                }
-            } catch (e) {
-                console.log('LocalStorage not available');
+            // Auto-focus username field
+            document.getElementById('username').focus();
+        });
+        
+        function fillDemoCredentials() {
+            document.getElementById('username').value = 'admin';
+            document.getElementById('password').value = 'admin123';
+            
+            // Add visual feedback
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-check"></i> Filled!';
+            button.style.background = '#2ecc71';
+            button.style.color = 'white';
+            
+            setTimeout(() => {
+                button.innerHTML = originalText;
+                button.style.background = '';
+                button.style.color = '';
+            }, 1500);
+        }
+        
+        // Keyboard shortcut for demo credentials
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'd') {
+                e.preventDefault();
+                fillDemoCredentials();
             }
-
-            // Save credentials on form submit
-            form.addEventListener('submit', function() {
-                try {
-                    if (rememberCheckbox.checked) {
-                        localStorage.setItem('rememberMe', 'true');
-                        localStorage.setItem('savedUsername', usernameField.value);
-                    } else {
-                        localStorage.removeItem('rememberMe');
-                        localStorage.removeItem('savedUsername');
-                    }
-                } catch (e) {
-                    console.log('LocalStorage not available');
-                }
-            });
-
-            // Enhanced visual feedback
-            [usernameField, passwordField].forEach(field => {
-                field.addEventListener('focus', function() {
-                    this.parentNode.style.transform = 'scale(1.02)';
-                    this.parentNode.style.transition = 'transform 0.2s ease';
-                });
-
-                field.addEventListener('blur', function() {
-                    this.parentNode.style.transform = 'scale(1)';
-                });
-            });
-
-            // Button hover enhancement
-            loginBtn.addEventListener('mouseenter', function() {
-                if (!this.disabled) {
-                    this.style.transform = 'translateY(-2px) scale(1.02)';
-                }
-            });
-
-            loginBtn.addEventListener('mouseleave', function() {
-                if (!this.disabled) {
-                    this.style.transform = 'translateY(0) scale(1)';
-                }
-            });
-
-            // Keyboard shortcuts
-            document.addEventListener('keydown', function(e) {
-                // Ctrl/Cmd + Enter to submit
-                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                    e.preventDefault();
-                    form.dispatchEvent(new Event('submit'));
-                }
-            });
-
-            // Logo interaction
-            const logo = document.querySelector('.company-logo, .logo-placeholder');
-            if (logo) {
-                logo.addEventListener('click', function() {
-                    this.style.animation = 'bounce 0.6s ease';
-                    setTimeout(() => {
-                        this.style.animation = '';
-                    }, 600);
-                });
-            }
-
-            // Add loading overlay for better UX
-            function showLoadingOverlay() {
-                const overlay = document.createElement('div');
-                overlay.style.cssText = `
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: rgba(102, 126, 234, 0.8);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 9999;
-                    backdrop-filter: blur(4px);
-                `;
-                overlay.innerHTML = `
-                    <div style="text-align: center; color: white;">
-                        <i class="fas fa-spinner fa-spin" style="font-size: 3rem; margin-bottom: 1rem;"></i>
-                        <p style="font-size: 1.2rem; font-weight: 600;">Signing you in...</p>
-                    </div>
-                `;
-                document.body.appendChild(overlay);
-            }
-
-            // Show loading overlay on successful form submission
-            form.addEventListener('submit', function(e) {
-                if (this.checkValidity()) {
-                    setTimeout(showLoadingOverlay, 100);
-                }
-            });
         });
     </script>
 </body>
