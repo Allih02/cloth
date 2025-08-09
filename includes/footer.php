@@ -5,6 +5,7 @@
         </div>
     </footer>
 
+    <script src="<?php echo getBasePath(); ?>assests/js/script.js"></script>
     <script>
         // Document ready function
         document.addEventListener('DOMContentLoaded', function() {

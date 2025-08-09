@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Super Sub Jersey Store Management System</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="<?php echo getBasePath(); ?>assests/css/style.css">
     <style>
         * {
             margin: 0;
@@ -89,6 +90,30 @@
         }
 
         .sidebar-toggle:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        .sidebar-close {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            padding: 0.5rem;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+
+        .sidebar-close:hover {
             background: rgba(255, 255, 255, 0.2);
             transform: scale(1.1);
         }
@@ -616,36 +641,244 @@
             color: #667eea !important;
         }
 
-        /* Mobile Responsive */
-        @media (max-width: 768px) {
+        /* Mobile Navigation Trigger */
+        .mobile-nav-trigger {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1051; /* Higher than modal */
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            padding: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,.08);
+            display: none;
+        }
+
+        .mobile-menu-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            backdrop-filter: blur(10px);
+        }
+
+        .mobile-menu-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-1px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        .mobile-menu-btn i {
+            font-size: 18px;
+        }
+
+        /* Enhanced Mobile Responsive Design */
+        @media (max-width: 1024px) {
+            .mobile-nav-trigger {
+                display: block;
+            }
+
             .sidebar {
-                width: 70px;
+                transform: translateX(-100%);
+                position: fixed;
+                z-index: var(--z-modal);
+                width: 280px;
+                transition: transform var(--transition-normal);
             }
 
             .sidebar.collapsed {
-                width: 280px;
+                transform: translateX(0);
             }
 
             .main-content {
-                margin-left: 70px;
+                margin-left: 0;
+                margin-top: 70px; /* Account for mobile nav trigger height */
+                transition: margin-left var(--transition-normal);
             }
 
             .main-content.expanded {
-                margin-left: 280px;
+                margin-left: 0;
+            }
+
+            /* Mobile overlay */
+            .sidebar-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: calc(var(--z-modal) - 1);
+                opacity: 0;
+                visibility: hidden;
+                transition: all var(--transition-normal);
+            }
+
+            .sidebar-overlay.show {
+                opacity: 1;
+                visibility: visible;
             }
 
             .stats-container {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: var(--space-lg);
             }
 
             .card-header {
                 flex-direction: column;
-                gap: 1rem;
+                gap: var(--space-lg);
+                align-items: stretch;
                 text-align: center;
             }
 
             .table-responsive {
-                font-size: 0.875rem;
+                font-size: var(--text-sm);
+            }
+
+            /* Mobile-friendly button spacing */
+            .btn-group {
+                display: flex;
+                flex-direction: column;
+                gap: var(--space-sm);
+            }
+
+            .btn-group .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .mobile-nav-trigger {
+                padding: var(--space-sm) var(--space-md);
+            }
+
+            .mobile-menu-btn {
+                padding: var(--space-sm) var(--space-md);
+                font-size: var(--text-xs);
+            }
+
+            .main-content {
+                margin-top: 60px; /* Smaller height for mobile */
+                padding: var(--space-md);
+            }
+
+            .stats-container {
+                grid-template-columns: 1fr;
+                gap: var(--space-md);
+            }
+
+            .card-header {
+                padding: var(--space-lg);
+            }
+
+            .card-body {
+                padding: var(--space-lg);
+            }
+
+            .table th, .table td {
+                padding: var(--space-sm);
+                font-size: var(--text-xs);
+            }
+
+            /* Hide less important table columns on mobile */
+            .table .d-none-mobile {
+                display: none;
+            }
+
+            /* Responsive forms */
+            .form-row {
+                flex-direction: column;
+                gap: var(--space-md);
+            }
+
+            .btn:not(.btn-sm) {
+                padding: var(--space-lg) var(--space-xl);
+                font-size: var(--text-base);
+            }
+        }
+
+        @media (max-width: 576px) {
+            .container {
+                padding-left: var(--space-md);
+                padding-right: var(--space-md);
+            }
+
+            .card {
+                margin-bottom: var(--space-lg);
+            }
+
+            .card-header {
+                padding: var(--space-md);
+            }
+
+            .card-body {
+                padding: var(--space-md);
+            }
+
+            .stats-container {
+                gap: var(--space-sm);
+            }
+
+            .stat-card {
+                padding: var(--space-lg);
+                min-height: auto;
+            }
+
+            .btn {
+                font-size: var(--text-sm);
+                padding: var(--space-md) var(--space-lg);
+            }
+
+            /* Ultra-compact table for very small screens */
+            .table th, .table td {
+                padding: var(--space-xs);
+                font-size: var(--text-xs);
+            }
+        }
+
+        /* Tablet-specific optimizations */
+        @media (min-width: 768px) and (max-width: 1023px) {
+            .sidebar {
+                width: 240px;
+            }
+
+            .main-content {
+                margin-left: 240px;
+            }
+
+            .stats-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* Large desktop optimizations */
+        @media (min-width: 1440px) {
+            .container {
+                max-width: 1400px;
+            }
+
+            .sidebar {
+                width: 320px;
+            }
+
+            .main-content {
+                margin-left: 320px;
+                padding: var(--space-4xl);
+            }
+
+            .stats-container {
+                grid-template-columns: repeat(4, 1fr);
+                gap: var(--space-2xl);
             }
         }
 
@@ -683,12 +916,26 @@
     </style>
 </head>
 <body>
+    <!-- Mobile Navigation Trigger -->
+    <div class="mobile-nav-trigger" id="mobileNavTrigger">
+        <button class="mobile-menu-btn" onclick="toggleSidebar()">
+            <i class="fas fa-bars"></i>
+            <span>Menu</span>
+        </button>
+    </div>
+
+    <!-- Mobile Sidebar Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+    
     <!-- Sidebar Navigation -->
     <div class="sidebar" id="sidebar">
         <!-- Sidebar Header -->
         <div class="sidebar-header">
             <button class="sidebar-toggle" onclick="toggleSidebar()">
                 <i class="fas fa-bars"></i>
+            </button>
+            <button class="sidebar-close d-lg-none" onclick="toggleSidebar()">
+                <i class="fas fa-times"></i>
             </button>
             <h1><i class="fas fa-store"></i> Super Sub Jersey Store</h1>
             <div class="subtitle">Management System</div>
@@ -782,30 +1029,110 @@
         <div class="container">
 
     <script>
-        // Sidebar toggle functionality
+        // Enhanced Sidebar toggle functionality with mobile support
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const mainContent = document.getElementById('mainContent');
+            const overlay = document.getElementById('sidebarOverlay');
+            const isMobile = window.innerWidth <= 1024;
             
-            sidebar.classList.toggle('collapsed');
-            mainContent.classList.toggle('expanded');
+            if (isMobile) {
+                // Mobile behavior: slide in/out with overlay
+                sidebar.classList.toggle('collapsed');
+                overlay.classList.toggle('show');
+                
+                // Prevent body scroll when sidebar is open
+                if (sidebar.classList.contains('collapsed')) {
+                    document.body.style.overflow = 'hidden';
+                } else {
+                    document.body.style.overflow = '';
+                }
+            } else {
+                // Desktop behavior: expand/collapse
+                sidebar.classList.toggle('collapsed');
+                mainContent.classList.toggle('expanded');
+                
+                // Store sidebar state in localStorage for desktop
+                const isCollapsed = sidebar.classList.contains('collapsed');
+                localStorage.setItem('sidebarCollapsed', isCollapsed);
+            }
+        }
+
+        // Close sidebar when clicking overlay (mobile)
+        function closeSidebarOnOverlay() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
             
-            // Store sidebar state in localStorage
-            const isCollapsed = sidebar.classList.contains('collapsed');
-            localStorage.setItem('sidebarCollapsed', isCollapsed);
+            if (sidebar.classList.contains('collapsed')) {
+                sidebar.classList.remove('collapsed');
+                overlay.classList.remove('show');
+                document.body.style.overflow = '';
+            }
+        }
+
+        // Enhanced responsive sidebar management
+        function handleSidebarResize() {
+            const sidebar = document.getElementById('sidebar');
+            const mainContent = document.getElementById('mainContent');
+            const overlay = document.getElementById('sidebarOverlay');
+            const mobileNavTrigger = document.getElementById('mobileNavTrigger');
+            const isMobile = window.innerWidth <= 1024;
+            
+            if (isMobile) {
+                // Mobile: hide sidebar by default, show mobile trigger
+                sidebar.classList.remove('collapsed');
+                mainContent.classList.remove('expanded');
+                overlay.classList.remove('show');
+                document.body.style.overflow = '';
+                if (mobileNavTrigger) {
+                    mobileNavTrigger.style.display = 'block';
+                }
+            } else {
+                // Desktop: restore saved state, hide mobile trigger
+                const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+                if (isCollapsed) {
+                    sidebar.classList.add('collapsed');
+                    mainContent.classList.add('expanded');
+                } else {
+                    sidebar.classList.remove('collapsed');
+                    mainContent.classList.remove('expanded');
+                }
+                overlay.classList.remove('show');
+                document.body.style.overflow = '';
+                if (mobileNavTrigger) {
+                    mobileNavTrigger.style.display = 'none';
+                }
+            }
         }
 
         // Restore sidebar state on page load
         document.addEventListener('DOMContentLoaded', function() {
-            const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+            // Initial setup
+            handleSidebarResize();
             
-            if (isCollapsed) {
-                document.getElementById('sidebar').classList.add('collapsed');
-                document.getElementById('mainContent').classList.add('expanded');
-            }
-
             // Set active navigation item
             setActiveNavItem();
+            
+            // Add overlay click handler
+            document.getElementById('sidebarOverlay').addEventListener('click', closeSidebarOnOverlay);
+            
+            // Add escape key handler for mobile
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    const sidebar = document.getElementById('sidebar');
+                    const overlay = document.getElementById('sidebarOverlay');
+                    if (window.innerWidth <= 1024 && sidebar.classList.contains('collapsed')) {
+                        closeSidebarOnOverlay();
+                    }
+                }
+            });
+
+            // Ensure mobile navigation is visible on mobile devices
+            const isMobile = window.innerWidth <= 1024;
+            const mobileNavTrigger = document.getElementById('mobileNavTrigger');
+            if (isMobile && mobileNavTrigger) {
+                mobileNavTrigger.style.display = 'block';
+            }
         });
 
         // Set active navigation item based on current page
@@ -834,14 +1161,12 @@
             }
         }
 
-        // Mobile menu handling
+        // Enhanced window resize handling
+        let resizeTimeout;
         window.addEventListener('resize', function() {
-            if (window.innerWidth <= 768) {
-                // On mobile, start with collapsed sidebar
-                if (!document.getElementById('sidebar').classList.contains('collapsed')) {
-                    toggleSidebar();
-                }
-            }
+            // Debounce resize events for better performance
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(handleSidebarResize, 150);
         });
 
         // Show notification function

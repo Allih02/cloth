@@ -182,8 +182,8 @@ $suppliers = $conn->query("SELECT * FROM suppliers ORDER BY name");
         <?php endif; ?>
         
         <form method="POST" action="" id="productForm" enctype="multipart/form-data">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
-                <div>
+            <div class="row">
+                <div class="col-12 col-lg-6">
                     <div class="form-group">
                         <label for="name"><i class="fas fa-tag"></i> Product Name *</label>
                         <input type="text" id="name" name="name" class="form-control" required
@@ -240,7 +240,7 @@ $suppliers = $conn->query("SELECT * FROM suppliers ORDER BY name");
                     </div>
                 </div>
                 
-                <div>
+                <div class="col-12 col-lg-6">
                     <div class="form-group">
                         <label for="brand"><i class="fas fa-certificate"></i> Brand *</label>
                         <input type="text" id="brand" name="brand" class="form-control" required
@@ -289,13 +289,17 @@ $suppliers = $conn->query("SELECT * FROM suppliers ORDER BY name");
                 </div>
             </div>
             
-            <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #e1e8ed;">
-                <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-save"></i> Add Product
-                </button>
-                <a href="view_products.php" class="btn btn-secondary">
-                    <i class="fas fa-times"></i> Cancel
-                </a>
+            <div class="row">
+                <div class="col-12">
+                    <div class="d-flex flex-column flex-md-row gap-md justify-content-md-start" style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid var(--border-color);">
+                        <button type="submit" class="btn btn-primary mb-2 mb-md-0">
+                            <i class="fas fa-save"></i> Add Product
+                        </button>
+                        <a href="view_products.php" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                    </div>
+                </div>
             </div>
         </form>
     </div>
@@ -442,9 +446,72 @@ function removeImage() {
 </script>
 
 <style>
+/* Enhanced Mobile Responsive Design for Add Product Form */
 @media (max-width: 768px) {
-    div[style*="grid-template-columns: 1fr 1fr"] {
-        grid-template-columns: 1fr !important;
+    .form-group {
+        margin-bottom: var(--space-xl);
+    }
+    
+    .upload-guidelines {
+        margin-top: var(--space-lg);
+        padding: var(--space-md);
+    }
+    
+    .upload-guidelines h4 {
+        font-size: var(--text-sm);
+    }
+    
+    .upload-guidelines ul {
+        font-size: var(--text-xs);
+    }
+    
+    .image-preview {
+        margin-top: var(--space-md);
+        padding: var(--space-sm);
+    }
+    
+    .image-preview img {
+        max-width: 150px;
+        max-height: 150px;
+    }
+}
+
+@media (max-width: 576px) {
+    .card-header {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+        gap: var(--space-md);
+    }
+    
+    .form-group label {
+        font-size: var(--text-sm);
+    }
+    
+    .form-control {
+        padding: var(--space-md);
+        font-size: var(--text-sm);
+    }
+    
+    .btn {
+        padding: var(--space-md) var(--space-lg);
+        font-size: var(--text-sm);
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .upload-guidelines {
+        padding: var(--space-sm);
+    }
+    
+    .image-preview img {
+        max-width: 120px;
+        max-height: 120px;
+    }
+    
+    #colorPicker {
+        width: 40px;
+        height: 32px;
     }
 }
 

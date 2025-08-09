@@ -119,6 +119,7 @@ if (!$error && $_SERVER['REQUEST_METHOD'] !== 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Super Sub Jersey Store</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="../assests/css/style.css">
     <style>
         * {
             margin: 0;
@@ -133,17 +134,29 @@ if (!$error && $_SERVER['REQUEST_METHOD'] !== 'POST') {
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            padding: var(--space-lg);
         }
 
         .login-container {
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
-            border-radius: 20px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-xl);
             overflow: hidden;
             width: 100%;
             max-width: 400px;
+            animation: fadeInUp 0.6s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .login-header {
@@ -309,6 +322,112 @@ if (!$error && $_SERVER['REQUEST_METHOD'] !== 'POST') {
         .quick-login button:hover {
             background: #2ecc71;
             color: white;
+        }
+
+        /* Enhanced Mobile Responsive Design */
+        @media (max-width: 768px) {
+            body {
+                padding: var(--space-md);
+                align-items: stretch;
+            }
+
+            .login-container {
+                max-width: none;
+                border-radius: var(--radius-lg);
+                margin: auto 0;
+            }
+
+            .login-header {
+                padding: var(--space-xl);
+            }
+
+            .login-header h2 {
+                font-size: var(--text-xl);
+            }
+
+            .login-body {
+                padding: var(--space-xl);
+            }
+
+            .form-control {
+                padding: var(--space-lg);
+                font-size: var(--text-base);
+            }
+
+            .btn {
+                padding: var(--space-lg);
+                font-size: var(--text-base);
+            }
+
+            .demo-credentials {
+                padding: var(--space-lg);
+            }
+
+            .demo-credentials h4 {
+                font-size: var(--text-sm);
+            }
+
+            .demo-credentials p {
+                font-size: var(--text-xs);
+            }
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: var(--space-sm);
+            }
+
+            .login-container {
+                border-radius: var(--radius);
+            }
+
+            .login-header {
+                padding: var(--space-lg);
+            }
+
+            .login-header h2 {
+                font-size: var(--text-lg);
+            }
+
+            .login-header p {
+                font-size: var(--text-xs);
+            }
+
+            .login-body {
+                padding: var(--space-lg);
+            }
+
+            .form-group {
+                margin-bottom: var(--space-lg);
+            }
+
+            .demo-credentials {
+                padding: var(--space-md);
+            }
+        }
+
+        /* Landscape orientation on mobile */
+        @media (max-height: 600px) and (orientation: landscape) {
+            body {
+                align-items: flex-start;
+                padding: var(--space-sm);
+            }
+
+            .login-container {
+                margin: var(--space-sm) auto;
+            }
+
+            .login-header {
+                padding: var(--space-lg);
+            }
+
+            .login-body {
+                padding: var(--space-lg);
+            }
+
+            .demo-credentials {
+                padding: var(--space-md);
+            }
         }
     </style>
 </head>

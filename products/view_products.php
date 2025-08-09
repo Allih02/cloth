@@ -31,41 +31,47 @@ requireLogin();
         <?php endif; ?>
         
         <!-- Search and Filter -->
-        <div style="margin-bottom: 2rem; display: flex; gap: 1rem; flex-wrap: wrap;">
-            <input type="text" id="searchInput" placeholder="Search products..." class="form-control" style="max-width: 300px;">
-            <select id="categoryFilter" class="form-control" style="max-width: 200px;">
-                <option value="">All Categories</option>
-                <?php
-                $categories = $conn->query("SELECT * FROM categories ORDER BY name");
-                while ($category = $categories->fetch_assoc()):
-                ?>
-                <option value="<?php echo htmlspecialchars($category['name']); ?>">
-                    <?php echo htmlspecialchars($category['name']); ?>
-                </option>
-                <?php endwhile; ?>
-            </select>
-            <select id="stockFilter" class="form-control" style="max-width: 200px;">
-                <option value="">All Stock Levels</option>
-                <option value="in-stock">In Stock (>20)</option>
-                <option value="low-stock">Low Stock (1-20)</option>
-                <option value="out-of-stock">Out of Stock (0)</option>
-            </select>
+        <div class="row mb-3">
+            <div class="col-12 col-md-4 col-lg-3 mb-2">
+                <input type="text" id="searchInput" placeholder="Search products..." class="form-control">
+            </div>
+            <div class="col-12 col-md-4 col-lg-3 mb-2">
+                <select id="categoryFilter" class="form-control">
+                    <option value="">All Categories</option>
+                    <?php
+                    $categories = $conn->query("SELECT * FROM categories ORDER BY name");
+                    while ($category = $categories->fetch_assoc()):
+                    ?>
+                    <option value="<?php echo htmlspecialchars($category['name']); ?>">
+                        <?php echo htmlspecialchars($category['name']); ?>
+                    </option>
+                    <?php endwhile; ?>
+                </select>
+            </div>
+            <div class="col-12 col-md-4 col-lg-3 mb-2">
+                <select id="stockFilter" class="form-control">
+                    <option value="">All Stock Levels</option>
+                    <option value="in-stock">In Stock (>20)</option>
+                    <option value="low-stock">Low Stock (1-20)</option>
+                    <option value="out-of-stock">Out of Stock (0)</option>
+                </select>
+            </div>
         </div>
         
         <div class="table-responsive">
             <table class="table" id="productsTable">
                 <thead>
                     <tr>
-                        <th>ID</th>
+                        <th class="d-none d-md-table-cell">ID</th>
                         <th>Image</th>
                         <th>Name</th>
-                        <th>Category</th>
-                        <th>Size</th>
-                        <th>Color</th>
-                        <th>Brand</th>
+                        <th class="d-none d-lg-table-cell">Category</th>
+                        <th class="d-none d-md-table-cell">Size</th>
+                        <th class="d-none d-md-table-cell">Color</th>
+                        <th class="d-none d-lg-table-cell">Brand</th>
                         <th>Price</th>
                         <th>Stock</th>
-                        <th>Supplier</th>
+                        <th class="d-none d-lg-table-cell">Supplier</th>
                         <?php if (isAdmin()): ?>
                             <th>Actions</th>
                         <?php endif; ?>
@@ -93,7 +99,7 @@ requireLogin();
                     ?>
                     <tr data-category="<?php echo htmlspecialchars($row['category_name']); ?>" 
                         data-stock="<?php echo $row['stock_quantity']; ?>">
-                        <td><?php echo $row['product_id']; ?></td>
+                        <td class="d-none d-md-table-cell"><?php echo $row['product_id']; ?></td>
                         <td class="product-image-cell">
                             <?php if (!empty($row['image_path']) && file_exists($row['image_path'])): ?>
                                 <div class="product-image-container">
@@ -112,16 +118,29 @@ requireLogin();
                                 </div>
                             <?php endif; ?>
                         </td>
-                        <td><strong><?php echo htmlspecialchars($row['name']); ?></strong></td>
-                        <td><?php echo htmlspecialchars($row['category_name']); ?></td>
-                        <td><?php echo htmlspecialchars($row['size']); ?></td>
                         <td>
+                            <div class="product-info">
+                                <strong class="product-name"><?php echo htmlspecialchars($row['name']); ?></strong>
+                                <div class="d-md-none product-meta-mobile">
+                                    <small class="text-muted">
+                                        <?php echo htmlspecialchars($row['category_name']); ?> • 
+                                        <?php echo htmlspecialchars($row['size']); ?> • 
+                                        <?php echo htmlspecialchars($row['color']); ?>
+                                        <br>
+                                        <span class="text-primary"><?php echo htmlspecialchars($row['brand']); ?></span>
+                                    </small>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="d-none d-lg-table-cell"><?php echo htmlspecialchars($row['category_name']); ?></td>
+                        <td class="d-none d-md-table-cell"><?php echo htmlspecialchars($row['size']); ?></td>
+                        <td class="d-none d-md-table-cell">
                             <div class="color-display">
                                 <span style="display: inline-block; width: 20px; height: 20px; background-color: <?php echo strtolower($row['color']); ?>; border: 1px solid #ddd; border-radius: 3px; margin-right: 5px; vertical-align: middle;"></span>
                                 <?php echo htmlspecialchars($row['color']); ?>
                             </div>
                         </td>
-                        <td><?php echo htmlspecialchars($row['brand']); ?></td>
+                        <td class="d-none d-lg-table-cell"><?php echo htmlspecialchars($row['brand']); ?></td>
                         <td><strong>$<?php echo number_format($row['price'], 2); ?></strong></td>
                         <td class="<?php echo $stockClass; ?>">
                             <strong><?php echo number_format($row['stock_quantity']); ?></strong>
@@ -131,17 +150,29 @@ requireLogin();
                                 <i class="fas fa-exclamation-circle" title="Low stock"></i>
                             <?php endif; ?>
                         </td>
-                        <td><?php echo htmlspecialchars($row['supplier_name']); ?></td>
+                        <td class="d-none d-lg-table-cell"><?php echo htmlspecialchars($row['supplier_name']); ?></td>
                         <?php if (isAdmin()): ?>
-                            <td>
-                                <a href="edit_product.php?id=<?php echo $row['product_id']; ?>" 
-                                   class="btn btn-primary btn-sm" title="Edit Product">
-                                    <i class="fas fa-edit"></i>
-                                </a>
-                                <a href="delete_product.php?id=<?php echo $row['product_id']; ?>" 
-                                   class="btn btn-danger btn-sm btn-delete" title="Delete Product">
-                                    <i class="fas fa-trash"></i>
-                                </a>
+                            <td class="actions-cell">
+                                <div class="btn-group-vertical d-md-none">
+                                    <a href="edit_product.php?id=<?php echo $row['product_id']; ?>" 
+                                       class="btn btn-primary btn-sm mb-1" title="Edit Product">
+                                        <i class="fas fa-edit"></i> Edit
+                                    </a>
+                                    <a href="delete_product.php?id=<?php echo $row['product_id']; ?>" 
+                                       class="btn btn-danger btn-sm btn-delete" title="Delete Product">
+                                        <i class="fas fa-trash"></i> Delete
+                                    </a>
+                                </div>
+                                <div class="btn-group d-none d-md-flex">
+                                    <a href="edit_product.php?id=<?php echo $row['product_id']; ?>" 
+                                       class="btn btn-primary btn-sm" title="Edit Product">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <a href="delete_product.php?id=<?php echo $row['product_id']; ?>" 
+                                       class="btn btn-danger btn-sm btn-delete" title="Delete Product">
+                                        <i class="fas fa-trash"></i>
+                                    </a>
+                                </div>
                             </td>
                         <?php endif; ?>
                     </tr>
@@ -439,7 +470,37 @@ document.getElementById('imageModal').addEventListener('click', function(event) 
     }
 }
 
-/* Mobile Responsive */
+/* Enhanced Mobile Responsive Styles */
+.product-info {
+    min-width: 0;
+}
+
+.product-name {
+    display: block;
+    margin-bottom: var(--space-xs);
+    font-size: var(--text-base);
+    line-height: var(--leading-tight);
+}
+
+.product-meta-mobile {
+    margin-top: var(--space-xs);
+    font-size: var(--text-xs);
+    line-height: var(--leading-snug);
+}
+
+.actions-cell {
+    min-width: 120px;
+}
+
+.btn-group-vertical .btn {
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--space-xs);
+}
+
+.btn-group-vertical .btn:last-child {
+    margin-bottom: 0;
+}
+
 @media (max-width: 768px) {
     .product-image-container {
         width: 50px;
@@ -474,6 +535,53 @@ document.getElementById('imageModal').addEventListener('click', function(event) 
     .image-modal-caption {
         width: 95%;
         font-size: 1rem;
+    }
+
+    .product-name {
+        font-size: var(--text-sm);
+    }
+
+    .actions-cell {
+        min-width: 100px;
+    }
+
+    .btn-group-vertical .btn {
+        font-size: var(--text-xs);
+        padding: var(--space-xs) var(--space-sm);
+    }
+}
+
+@media (max-width: 576px) {
+    .product-image-container {
+        width: 40px;
+        height: 40px;
+    }
+    
+    .product-image-placeholder {
+        width: 40px;
+        height: 40px;
+        font-size: 0.5rem;
+    }
+    
+    .product-image-placeholder i {
+        font-size: 0.8rem;
+    }
+
+    .product-name {
+        font-size: var(--text-xs);
+    }
+
+    .product-meta-mobile {
+        font-size: 0.65rem;
+    }
+
+    .actions-cell {
+        min-width: 80px;
+    }
+
+    .btn-group-vertical .btn {
+        font-size: 0.65rem;
+        padding: 0.25rem 0.5rem;
     }
 }
 
